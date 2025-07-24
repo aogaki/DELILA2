@@ -1,0 +1,10 @@
+---
+Language:        Cpp
+BasedOnStyle:  Google
+BreakBeforeBraces: Linux
+DerivePointerAlignment: false
+PointerAlignment: Right
+CommentPragmas: ^
+UseTab:          Never
+...
+

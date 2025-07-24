@@ -1,0 +1,148 @@
+#ifndef PHA1DECODER_HPP
+#define PHA1DECODER_HPP
+
+#include <cstdint>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+#include "DataType.hpp"
+#include "DataValidator.hpp"
+#include "DecoderLogger.hpp"
+#include "EventData.hpp"
+#include "IDecoder.hpp"
+#include "MemoryReader.hpp"
+#include "PHA1Constants.hpp"
+#include "PHA1Structures.hpp"
+#include "RawData.hpp"
+
+namespace DELILA
+{
+namespace Digitizer
+{
+
+class PHA1Decoder : public IDecoder
+{
+ public:
+  // Constructor/Destructor
+  explicit PHA1Decoder(uint32_t nThreads = 1);
+  ~PHA1Decoder() override;
+
+  // Configuration
+  void SetTimeStep(uint32_t timeStep) override
+  {
+    fTimeStep = timeStep;
+    UpdateCachedValues();
+  }
+  void SetDumpFlag(bool dumpFlag) override
+  {
+    fDumpFlag = dumpFlag;
+    DecoderLogger::SetDebugEnabled(dumpFlag);
+  }
+  void SetModuleNumber(uint8_t moduleNumber) override { fModuleNumber = moduleNumber; }
+  void SetLogLevel(LogLevel level) { DecoderLogger::SetLogLevel(level); }
+  void SetEventDataCacheSize(size_t size) { fEventDataCacheSize = size; }
+
+  // === Performance Optimization ===
+  void PreAllocateEventData(size_t expectedEvents);
+  void UpdateCachedValues();
+
+  // Data Processing
+  DataType AddData(std::unique_ptr<RawData_t> rawData) override;
+  std::unique_ptr<std::vector<std::unique_ptr<EventData>>> GetEventData() override;
+
+ private:
+  // === Configuration ===
+  uint32_t fTimeStep = 1;
+  bool fDumpFlag = false;
+  uint8_t fModuleNumber = 0;
+
+  // === Threading Control ===
+  bool fDecodeFlag = false;
+  std::vector<std::thread> fDecodeThreads;
+
+  // === Start/Stop State ===
+  bool fIsRunning = false;
+
+  // === Raw Data Queue ===
+  std::deque<std::unique_ptr<RawData_t>> fRawDataQueue;
+  std::mutex fRawDataMutex;
+
+  // === Processed Data Storage ===
+  std::unique_ptr<std::vector<std::unique_ptr<EventData>>> fEventDataVec;
+  std::mutex fEventDataMutex;
+
+  // === Data Processing State ===
+  uint64_t fLastCounter = 0;
+
+  // === Performance Optimization Cache ===
+  mutable std::unique_ptr<std::vector<std::unique_ptr<EventData>>>
+      fEventDataCache;
+  size_t fEventDataCacheSize = 1000;  // Default cache size
+
+  // === Pre-computed Values ===
+  double fFineTimeMultiplier = 0.0;  // Cached fine time multiplier
+
+  // === Data Type Detection ===
+  DataType CheckDataType(std::unique_ptr<RawData_t> &rawData);
+  bool CheckStart(std::unique_ptr<RawData_t> &rawData);
+  bool CheckStop(std::unique_ptr<RawData_t> &rawData);
+
+  // === Data Processing ===
+  void DecodeThread();
+  void DecodeData(std::unique_ptr<RawData_t> rawData);
+
+  // === Data Decoding Helpers ===
+  void DumpRawData(const RawData_t &rawData) const;
+  DecoderResult ValidateDataHeader(uint32_t headerWord, size_t dataSize);
+  DecoderResult ProcessEventData(
+      const std::vector<uint8_t>::iterator &dataStart, uint32_t totalSize);
+
+  // === Decomposed Processing Methods ===
+  DecoderResult ProcessBoardAggregateBlock(
+      MemoryReader &reader, size_t &wordIndex,
+      std::vector<std::unique_ptr<EventData>> &eventDataVec);
+  DecoderResult ProcessChannelPairs(
+      MemoryReader &reader, size_t &wordIndex, const PHA1BoardHeaderInfo &boardInfo,
+      size_t boardEndIndex,
+      std::vector<std::unique_ptr<EventData>> &eventDataVec);
+  DecoderResult ValidateBlockBounds(size_t currentIndex, size_t endIndex,
+                                    size_t totalSize);
+
+  // === PHA1 Format Structures (defined in PHA1Structures.hpp) ===
+
+  // PHA1 decoding methods
+  DecoderResult DecodeBoardHeader(MemoryReader &reader, size_t &wordIndex,
+                                  PHA1BoardHeaderInfo &boardInfo);
+  DecoderResult DecodeDualChannelHeader(MemoryReader &reader, size_t &wordIndex,
+                                        PHA1DualChannelInfo &dualChInfo);
+
+  // === Decomposed Event Decoding Methods ===
+  std::unique_ptr<EventData> DecodeEventDirect(
+      MemoryReader &reader, size_t &wordIndex,
+      const PHA1DualChannelInfo &dualChInfo);
+  DecoderResult DecodeEventHeader(MemoryReader &reader, size_t &wordIndex,
+                                  uint32_t &triggerTimeTag, bool &isOddChannel);
+  DecoderResult DecodeEventTimestamp(MemoryReader &reader, size_t &wordIndex,
+                                     const PHA1DualChannelInfo &dualChInfo,
+                                     uint32_t triggerTimeTag,
+                                     EventData &eventData);
+  DecoderResult DecodeEventDataComponents(MemoryReader &reader,
+                                          size_t &wordIndex,
+                                          const PHA1DualChannelInfo &dualChInfo,
+                                          EventData &eventData);
+
+  void DecodeWaveform(MemoryReader &reader, size_t &wordIndex,
+                      const PHA1DualChannelInfo &dualChInfo, EventData &eventData);
+  void DecodeExtrasWord(uint32_t extrasWord, uint8_t extraOption,
+                        EventData &eventData, uint16_t &extendedTime,
+                        uint16_t &fineTimeStamp);
+  void DecodeEnergyWord(uint32_t energyWord, EventData &eventData);
+};
+
+}  // namespace Digitizer
+}  // namespace DELILA
+
+#endif  // PHA1DECODER_HPP

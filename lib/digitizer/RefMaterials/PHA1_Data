@@ -1,0 +1,106 @@
+As same as PSD1, The fetched data has multiple Board aggregate block.
+
+Board block aggregate header (4 words)
+First word
+bit[0:27] = Board aggregate size in 32-bit words
+bit[28: 31] = 0b1010
+Second word
+bit[0:7] = Dual channel mask. if bit1 is set, the pair of ch0 and ch1. if bit2 is set, the pair of ch2 and ch3, etc.
+bit[8:22] = Pattern of LVDS
+bit[26] = board fail flag
+bit[27:31] = Board ID
+Third word
+bit[0:22] = Board aggregate counter
+Fourth word
+bit[0:31] = Board aggregate time tag.
+
+If Dual channel mask is 0b110, the first Dual channel block is for ch2 and ch3, the second Dual channel block is for ch4 and ch5.
+Dual channel block aggregate header (2 words)
+First word
+bit[0:30] = Dual channel aggregate size in 32-bit words
+bit[31] if 1, the second word is the Format Info
+Second word
+bit[0:15] = Number of samles in the waveform / 8. If this is 0, the waveform is not present. NUM SAMPLES WAVE/8 corresponds to the number of words to be read in the event related to the waveform /4 (2 samples per word)
+bit[16:19] = DP: Digital Virtual Probe selection among:
+0000 = “Peaking”: shows where the energy is calculated
+0001 = “Armed”: digital input showing where the RC‐CR2 crosses the Threshold
+0010 = “Peak Run”: starts with the trigger and last for the whole event (see [RD2])
+0011 = “Pile‐Up”: shows when there is a pile‐up event and corresponds to the time interval when the energy
+calculation is disabled due to the pile‐up event
+0100 = “Peaking”: shows where the energy is calculated
+0101 = “Trg Validation Win”: digital input showing the trigger validation acceptance window TVAW (refer
+to [RD3])
+0110 = “BSL Freeze”: shows where the trapezoid baseline is frozen for the energy calculation
+0111 = “TRG Holdoff”: shows the trigger hold‐off parameter
+1000 = “Trg Validation”: shows the trigger validation signal TRG_VAL (refer to chapter and [RD3])
+1001 = “Acq Busy”, this is 1 when the board is busy (saturated input signal or full memory board) or there
+is a veto
+UM5678 ‐ 725‐730 DPP‐PHA User Manual rev. 3 107
+1010 = “TRG Window”: shows the RT Discrimination Width
+1011 = “Ext TRG”, shows the external trigger, when available
+1100 = “Busy”, shows when the memory board is full.
+
+bit[20:21] = AP2: Analog Probe 2 Selection. AP2 can be selected among:
+00 = “Input”: the input signal from pre‐amplified detectors
+01 = “Threshold”: the RC‐CR2 threshold value
+10 = “Trapezoid‐BL”: the trapezoid shape minus its baseline
+11 = “Baseline”: displays the trapezoid baselin
+
+bit[22:23] = AP1: Analog Probe 1 Selection. AP1 can be selected among:
+00 = “Input”: the input signal from pre‐amplified detectors
+01 = “RC‐CR”: first step of the trigger and timing filter
+10 = “RC‐CR2”: second step of the trigger and timing filter
+11 = “Trapezoid”: trapezoid resulting from the energy filt
+
+bit[24:26] = EX: Extra option. Usually use 0b010
+EX: Extras option enabled flag:
+000 = the word “EXTRAS 2” will be read as:
+[31 : 16] = Extended Time Stamp: those 16 bits can be added (most significant bits) to the Time Stamp
+representation, which becomes a 31+16=47 bit number;
+[15 : 0] = The trapezoid baseline value * 4.
+100 = the word “EXTRAS 2” will be read as:
+[31 : 16] = Lost Trigger Counter;
+[15 : 0] = Total Trigger Counter.
+001 = Reserved;
+010 = the word “EXTRAS 2” will be read as:
+[31 : 16] = Extended Time Stamp: those 16 bits can be added (most significant bits) to the Time Stamp
+representation, which becomes a 31+16=47 bit number;
+[15 : 10] = Reserved;
+[9 : 0] = Fine Time Stamp (linear interpolation of the RC‐CR2 signal between the events before and
+after the zero crossing);
+011 = Reserved;
+100 = the word “EXTRAS 2” will be read as:
+[31 : 16] = Lost Trigger Counter;
+[15 : 0] = Total Trigger Counter;
+101 = the word “EXTRAS 2” will be read as:
+[31 : 16] = Event Before the Zero Crossing;
+[15 : 0] = Event After the Zero Crossing;
+111 = Reserved.
+bit[31] = DT: Dual trace enabled flag (1 = enabled, 0 = disabled)
+bit[30] = EE: Energy enabled flag: Must be 1
+bit[29] = ET: Time Tag enabled flag, must be 1
+bit[28] = E2: Extras 2 enabled flag
+bit[27] = ES: Waveform (samples) enabled flag
+
+After header, events block
+First word
+bit[0:30] = Trigger time tag
+bit[31] = showing channel number of pair. 0 is even channel, 1 is odd channel
+If Num samples Wave/8 is not 0, the next words are waveform data. Lower bit signal is the first sample, higher bit signal is the second sample. If DT flag is set, the first sample is AP1 and the second sample is AP2, and so on.
+bit[0:13] = Analog Probe data.
+bit[14] = Digital Probe 
+bit[15] = Tn: bit identifying in which sample the Trigger occurred
+bit[16:29] = Analog Probe data
+bit[30] = Digital Probe 
+bit[31] = Tn: bit identifying in which sample the Trigger occurred
+
+DPim (i=1, 2; m=0, 1, …,n‐1): Digital Virtual Probe value i for sample m. DP1m is the value of the probe written
+Sm (m = 0, 2, 4… n‐2): Even Samples of AP1 at time t = m
+Sm′ (m′ = 1, 3, 4… n‐1): if DT=0, then Sm′ corresponds to the odd Samples of AP1 at time t = m′. Otherwise, if
+DT=1, they correspond to even Samples of AP2 at time t = m′ – 1
+Second word
+bit[0:31] = Extras 2. In our case, usually Extra option == 0b010, bit[0:9] = fine time stamp, bit[10:15] = nothing, bit[16:31] = extended time stamp.
+Third word
+bit[0:14] = Energy
+bit[15] = Pile up flag
+bit[16:25] = Extra
