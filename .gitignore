@@ -30,3 +30,26 @@
 *.exe
 *.out
 *.app
+
+# Build directories
+build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test results
+Testing/
+test_results/
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+
+# OS files
+.DS_Store
+Thumbs.db
