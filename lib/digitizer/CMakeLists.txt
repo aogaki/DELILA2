@@ -31,11 +31,38 @@ target_include_directories(delila_digitizer
 
 target_link_libraries(delila_digitizer
     PUBLIC ${ROOT_LIBRARIES}
-    PRIVATE RHTTP gomp CAEN_FELib
 )
 
+# Try to link RHTTP if available (part of ROOT)
+find_library(RHTTP_LIB RHTTP PATHS ${ROOT_LIBRARY_DIR})
+if(RHTTP_LIB)
+    target_link_libraries(delila_digitizer PRIVATE ${RHTTP_LIB})
+    message(STATUS "Found RHTTP: ${RHTTP_LIB}")
+else()
+    message(STATUS "RHTTP not found - building without RHTTP support")
+endif()
+
+# Try to link CAEN library if available
+find_library(CAEN_FELIB CAEN_FELib)
+if(CAEN_FELIB)
+    target_link_libraries(delila_digitizer PRIVATE CAEN_FELib)
+    message(STATUS "Found CAEN_FELib: ${CAEN_FELIB}")
+else()
+    message(STATUS "CAEN_FELib not found - building without CAEN support")
+endif()
+
 target_compile_features(delila_digitizer PUBLIC cxx_std_17)
-target_compile_options(delila_digitizer PRIVATE -pthread -O2 -fopenmp)
+
+# Add compile options based on compiler and platform
+target_compile_options(delila_digitizer PRIVATE -pthread -O2)
+
+# Try to find and use OpenMP if available
+find_package(OpenMP QUIET)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(delila_digitizer PRIVATE OpenMP::OpenMP_CXX)
+else()
+    message(STATUS "OpenMP not found - building without OpenMP support")
+endif()
 
 # Copy configuration files to build directory
 file(GLOB DIGITIZER_CONF_FILES 

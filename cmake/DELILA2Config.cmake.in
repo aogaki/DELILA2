@@ -1,0 +1,18 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies
+find_dependency(PkgConfig REQUIRED)
+find_dependency(ROOT REQUIRED COMPONENTS RIO Net)
+find_dependency(Protobuf REQUIRED)
+
+# Find optional dependencies
+pkg_check_modules(ZMQ libzmq)
+pkg_check_modules(LZ4 liblz4)
+pkg_check_modules(XXHASH libxxhash)
+
+# Include the targets
+include("${CMAKE_CURRENT_LIST_DIR}/DELILA2Targets.cmake")
+
+check_required_components(DELILA2)

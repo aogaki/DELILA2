@@ -17,43 +17,124 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Find dependencies
 find_package(PkgConfig REQUIRED)
 
-# ZeroMQ
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(ZMQ REQUIRED libzmq)
+# Optional dependencies for network functionality
+# Direct path specification for ZMQ on macOS
+if(EXISTS "/opt/homebrew/lib/libzmq.dylib")
+    set(ZMQ_LIBRARIES "/opt/homebrew/lib/libzmq.dylib")
+    set(ZMQ_INCLUDE_DIRS "/opt/homebrew/include")
+    set(ZMQ_FOUND TRUE)
+    message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
+elseif(EXISTS "/usr/local/lib/libzmq.dylib")
+    set(ZMQ_LIBRARIES "/usr/local/lib/libzmq.dylib")
+    set(ZMQ_INCLUDE_DIRS "/usr/local/include")
+    set(ZMQ_FOUND TRUE)
+    message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
+else()
+    # Fallback to pkg-config
+    pkg_check_modules(ZMQ libzmq)
+endif()
 
-# LZ4
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LZ4 REQUIRED liblz4)
+# Direct path specification for LZ4 on macOS
+if(EXISTS "/opt/homebrew/lib/liblz4.dylib")
+    set(LZ4_LIBRARIES "/opt/homebrew/lib/liblz4.dylib")
+    set(LZ4_INCLUDE_DIRS "/opt/homebrew/include")
+    set(LZ4_FOUND TRUE)
+    message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
+elseif(EXISTS "/usr/local/lib/liblz4.dylib")
+    set(LZ4_LIBRARIES "/usr/local/lib/liblz4.dylib")
+    set(LZ4_INCLUDE_DIRS "/usr/local/include")
+    set(LZ4_FOUND TRUE)
+    message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
+else()
+    pkg_check_modules(LZ4 liblz4)
+endif()
 
-# xxHash
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(XXHASH REQUIRED libxxhash)
+# Direct path specification for xxHash on macOS
+if(EXISTS "/opt/homebrew/lib/libxxhash.dylib")
+    set(XXHASH_LIBRARIES "/opt/homebrew/lib/libxxhash.dylib")
+    set(XXHASH_INCLUDE_DIRS "/opt/homebrew/include")
+    set(XXHASH_FOUND TRUE)
+    message(STATUS "Found xxHash at: ${XXHASH_LIBRARIES}")
+elseif(EXISTS "/usr/local/lib/libxxhash.dylib")
+    set(XXHASH_LIBRARIES "/usr/local/lib/libxxhash.dylib")
+    set(XXHASH_INCLUDE_DIRS "/usr/local/include")
+    set(XXHASH_FOUND TRUE)
+    message(STATUS "Found xxHash at: ${XXHASH_LIBRARIES}")
+else()
+    pkg_check_modules(XXHASH libxxhash)
+endif()
 
-# Protocol Buffers
-find_package(Protobuf REQUIRED)
+find_package(Protobuf QUIET)
 
 # Add subdirectories
 add_subdirectory(lib/digitizer)
 add_subdirectory(lib/net)
 
+# Create a main library source file
+set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
+file(WRITE ${DELILA_MAIN_SOURCE} 
+"// Main source file for DELILA library
+#include <iostream>
+
+namespace DELILA {
+    const char* getVersion() {
+        return \"1.0.0\";
+    }
+    
+    bool initialize(const char* config_path) {
+        // TODO: Implement initialization
+        return true;
+    }
+    
+    void shutdown() {
+        // TODO: Implement shutdown
+    }
+}
+")
+
 # Create unified libDELILA.so
-add_library(DELILA SHARED)
-target_link_libraries(DELILA 
-    PUBLIC delila_digitizer delila_net
-    PRIVATE ${ZMQ_LIBRARIES} ${LZ4_LIBRARIES} ${XXHASH_LIBRARIES} ${Protobuf_LIBRARIES}
-)
+add_library(DELILA SHARED ${DELILA_MAIN_SOURCE})
+# Link libraries conditionally
+target_link_libraries(DELILA PUBLIC delila_digitizer delila_net)
+
+# Link optional dependencies if found
+if(ZMQ_FOUND)
+    target_link_libraries(DELILA PRIVATE ${ZMQ_LIBRARIES})
+endif()
+if(LZ4_FOUND)
+    target_link_libraries(DELILA PRIVATE ${LZ4_LIBRARIES})
+endif()
+if(XXHASH_FOUND)
+    target_link_libraries(DELILA PRIVATE ${XXHASH_LIBRARIES})
+endif()
+if(Protobuf_FOUND)
+    target_link_libraries(DELILA PRIVATE ${Protobuf_LIBRARIES})
+endif()
 
 target_include_directories(DELILA
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${ZMQ_INCLUDE_DIRS} ${LZ4_INCLUDE_DIRS} 
-        ${XXHASH_INCLUDE_DIRS} ${Protobuf_INCLUDE_DIRS}
 )
 
+# Add optional include directories
+if(ZMQ_FOUND)
+    target_include_directories(DELILA PRIVATE ${ZMQ_INCLUDE_DIRS})
+endif()
+if(LZ4_FOUND)
+    target_include_directories(DELILA PRIVATE ${LZ4_INCLUDE_DIRS})
+endif()
+if(XXHASH_FOUND)
+    target_include_directories(DELILA PRIVATE ${XXHASH_INCLUDE_DIRS})
+endif()
+if(Protobuf_FOUND)
+    target_include_directories(DELILA PRIVATE ${Protobuf_INCLUDE_DIRS})
+endif()
+
 # Compiler definitions
-target_compile_definitions(DELILA PRIVATE ${ZMQ_CFLAGS_OTHER})
+if(ZMQ_FOUND)
+    target_compile_definitions(DELILA PRIVATE ${ZMQ_CFLAGS_OTHER})
+endif()
 
 # Set library properties
 set_target_properties(DELILA PROPERTIES
