@@ -1,6 +1,0 @@
-[submodule "lib/digitizer"]
-	path = lib/digitizer
-	url = git@github.com:aogaki/libDELILA-digitizer.git
-[submodule "lib/net"]
-	path = lib/net
-	url = git@github.com:aogaki/libDELILA-net.git
