@@ -1,0 +1,3 @@
+[submodule "lib/digitizer"]
+	path = lib/digitizer
+	url = git@github.com:aogaki/libDELILA-digitizer.git
