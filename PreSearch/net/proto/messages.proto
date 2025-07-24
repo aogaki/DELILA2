@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package delila.test;
+
+// EventData protobuf mapping
+message EventDataProto {
+    double timestamp_ns = 1;
+    uint32 energy = 2;
+    uint32 energy_short = 3;
+    uint32 module = 4;
+    uint32 channel = 5;
+    uint32 time_resolution = 6;
+    uint64 flags = 7;
+    // No waveform data (size = 0)
+}
+
+// Batch of events
+message EventBatchProto {
+    repeated EventDataProto events = 1;
+    uint64 sequence_number = 2;
+    uint64 timestamp = 3;
+    uint32 source_id = 4;
+}
+
+// gRPC service definition
+service DataStream {
+    // Source to merger
+    rpc SendData(stream EventBatchProto) returns (Acknowledgment);
+    
+    // Merger to sink
+    rpc ReceiveData(SubscribeRequest) returns (stream EventBatchProto);
+}
+
+message Acknowledgment {
+    bool success = 1;
+    uint64 last_sequence = 2;
+}
+
+message SubscribeRequest {
+    string sink_id = 1;
+}

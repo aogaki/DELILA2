@@ -1,0 +1,45 @@
+# Build files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Generated protobuf files
+*.pb.h
+*.pb.cc
+*.grpc.pb.h
+*.grpc.pb.cc
+
+# Compiled binaries
+data_sender
+data_hub
+data_receiver
+test_runner
+
+# Libraries
+*.a
+*.so
+*.dylib
+
+# Results and logs
+results/
+logs/
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

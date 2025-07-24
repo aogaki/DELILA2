@@ -1,0 +1,33 @@
+{
+    "test": {
+        "protocol": "grpc",
+        "transport": "tcp",
+        "duration_minutes": 10,
+        "batch_sizes": [1024, 10240, 20480, 51200, 102400, 204800, 512000, 1048576, 2097152, 5242880, 10485760],
+        "output_dir": "./results"
+    },
+    
+    "network": {
+        "merger_address": "localhost:3389",
+        "source1_port": 3390,
+        "source2_port": 3391,
+        "sink1_port": 3392,
+        "sink2_port": 3393
+    },
+    
+    "grpc": {
+        "max_message_size": 2147483647,
+        "keepalive_time_ms": 10000
+    },
+    
+    "zeromq": {
+        "high_water_mark": 0,
+        "linger_ms": 1000,
+        "rcv_buffer_size": 4194304
+    },
+    
+    "logging": {
+        "level": "info",
+        "directory": "./logs"
+    }
+}
