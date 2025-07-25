@@ -1,0 +1,208 @@
+{
+  "delila_net": {
+    "version": "1.0",
+    "profiles": {
+      "development": {
+        "buffer_settings": {
+          "high_water_mark": 1000,
+          "receive_buffer_size": 500,
+          "buffer_pool_size_gb": 2
+        },
+        "performance": {
+          "compression": {
+            "enabled": true,
+            "level": 1,
+            "algorithm": "lz4"
+          },
+          "timeout_ms": 10000
+        },
+        "error_handling": {
+          "gap_detection": {
+            "alert_threshold": 5,
+            "alert_window_minutes": 1
+          },
+          "retry_policy": {
+            "max_attempts": 10,
+            "initial_interval_ms": 100,
+            "max_interval_ms": 5000,
+            "backoff_multiplier": 2.0
+          }
+        },
+        "network": {
+          "default_interface": "",
+          "default_transport": "auto",
+          "tcp_settings": {
+            "no_delay": true,
+            "keep_alive": true,
+            "linger_ms": 1000
+          },
+          "ipc_settings": {
+            "temp_directory": "/tmp/delila_ipc_dev"
+          }
+        },
+        "logging": {
+          "level": "debug",
+          "connection_events": true,
+          "performance_metrics": true,
+          "sequence_gaps": true
+        },
+        "endpoints": {
+          "data_publisher": "tcp://*:5555",
+          "control_server": "tcp://*:5556",
+          "status_collector": "tcp://*:5557"
+        }
+      },
+      "production": {
+        "buffer_settings": {
+          "high_water_mark": 2000,
+          "receive_buffer_size": 1000,
+          "buffer_pool_size_gb": 4
+        },
+        "performance": {
+          "compression": {
+            "enabled": true,
+            "level": 1,
+            "algorithm": "lz4"
+          },
+          "timeout_ms": 5000
+        },
+        "error_handling": {
+          "gap_detection": {
+            "alert_threshold": 10,
+            "alert_window_minutes": 1
+          },
+          "retry_policy": {
+            "max_attempts": -1,
+            "initial_interval_ms": 100,
+            "max_interval_ms": 30000,
+            "backoff_multiplier": 2.0
+          }
+        },
+        "network": {
+          "default_interface": "eth0",
+          "default_transport": "auto",
+          "tcp_settings": {
+            "no_delay": true,
+            "keep_alive": true,
+            "linger_ms": 1000
+          },
+          "ipc_settings": {
+            "temp_directory": "/tmp/delila_ipc"
+          }
+        },
+        "logging": {
+          "level": "info",
+          "connection_events": true,
+          "performance_metrics": true,
+          "sequence_gaps": true
+        },
+        "endpoints": {
+          "data_publisher": "tcp://*:5555",
+          "control_server": "tcp://*:5556",
+          "status_collector": "tcp://*:5557"
+        }
+      },
+      "test": {
+        "buffer_settings": {
+          "high_water_mark": 100,
+          "receive_buffer_size": 50,
+          "buffer_pool_size_gb": 1
+        },
+        "performance": {
+          "compression": {
+            "enabled": false,
+            "level": 1,
+            "algorithm": "lz4"
+          },
+          "timeout_ms": 1000
+        },
+        "error_handling": {
+          "gap_detection": {
+            "alert_threshold": 2,
+            "alert_window_minutes": 1
+          },
+          "retry_policy": {
+            "max_attempts": 3,
+            "initial_interval_ms": 10,
+            "max_interval_ms": 1000,
+            "backoff_multiplier": 2.0
+          }
+        },
+        "network": {
+          "default_interface": "",
+          "default_transport": "ipc",
+          "tcp_settings": {
+            "no_delay": true,
+            "keep_alive": false,
+            "linger_ms": 100
+          },
+          "ipc_settings": {
+            "temp_directory": "/tmp/delila_ipc_test"
+          }
+        },
+        "logging": {
+          "level": "debug",
+          "connection_events": true,
+          "performance_metrics": false,
+          "sequence_gaps": true
+        },
+        "endpoints": {
+          "data_publisher": "ipc:///tmp/delila_test_data",
+          "control_server": "ipc:///tmp/delila_test_control",
+          "status_collector": "ipc:///tmp/delila_test_status"
+        }
+      },
+      "benchmark": {
+        "buffer_settings": {
+          "high_water_mark": 5000,
+          "receive_buffer_size": 2500,
+          "buffer_pool_size_gb": 8
+        },
+        "performance": {
+          "compression": {
+            "enabled": true,
+            "level": 3,
+            "algorithm": "lz4"
+          },
+          "timeout_ms": 30000
+        },
+        "error_handling": {
+          "gap_detection": {
+            "alert_threshold": 50,
+            "alert_window_minutes": 1
+          },
+          "retry_policy": {
+            "max_attempts": -1,
+            "initial_interval_ms": 50,
+            "max_interval_ms": 10000,
+            "backoff_multiplier": 1.5
+          }
+        },
+        "network": {
+          "default_interface": "",
+          "default_transport": "tcp",
+          "tcp_settings": {
+            "no_delay": true,
+            "keep_alive": true,
+            "linger_ms": 5000
+          },
+          "ipc_settings": {
+            "temp_directory": "/tmp/delila_ipc_bench"
+          }
+        },
+        "logging": {
+          "level": "warn",
+          "connection_events": false,
+          "performance_metrics": true,
+          "sequence_gaps": false
+        },
+        "endpoints": {
+          "data_publisher": "tcp://*:15555",
+          "control_server": "tcp://*:15556",
+          "status_collector": "tcp://*:15557"
+        }
+      }
+    },
+    "active_profile": "production"
+  }
+}

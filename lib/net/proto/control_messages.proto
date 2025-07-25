@@ -1,0 +1,232 @@
+// Protocol Buffer definitions for DELILA2 Network Library Control Messages
+// Version: 1.0
+// Generated C++ classes will be in DELILA::Net namespace
+
+syntax = "proto3";
+
+package delila.net.control;
+
+option cc_enable_arenas = true;
+option optimize_for = SPEED;
+
+// Common timestamp message
+message Timestamp {
+  uint64 nanoseconds_since_epoch = 1;
+}
+
+// Module identification
+message ModuleIdentity {
+  string module_id = 1;        // Unique module identifier (e.g., "fetcher_01")
+  uint32 instance_id = 2;      // Instance number for multiple instances
+  string module_type = 3;      // Module type ("fetcher", "merger", "recorder", etc.)
+  string version = 4;          // Module version string
+  string hostname = 5;         // Host machine name
+  uint32 process_id = 6;       // Process ID
+}
+
+// Network status metrics
+message NetworkStatus {
+  uint64 bytes_sent = 1;
+  uint64 bytes_received = 2;
+  uint64 messages_sent = 3;
+  uint64 messages_received = 4;
+  uint64 connection_attempts = 5;
+  uint64 connection_failures = 6;
+  uint64 reconnections = 7;
+  uint64 sequence_gaps_detected = 8;
+  uint64 messages_dropped = 9;
+  double current_send_rate_mbps = 10;
+  double current_recv_rate_mbps = 11;
+  Timestamp last_message_sent = 12;
+  Timestamp last_message_received = 13;
+}
+
+// Error categories and recovery actions
+message ErrorInfo {
+  enum ErrorCategory {
+    UNKNOWN_ERROR = 0;
+    NETWORK_ERROR = 1;
+    SERIALIZATION_ERROR = 2;
+    CONFIGURATION_ERROR = 3;
+    SYSTEM_ERROR = 4;
+    APPLICATION_ERROR = 5;
+  }
+  
+  enum SuggestedAction {
+    NO_ACTION = 0;
+    RETRY_OPERATION = 1;
+    RECONNECT = 2;
+    RESTART_MODULE = 3;
+    CHECK_CONFIGURATION = 4;
+    CONTACT_SUPPORT = 5;
+  }
+  
+  uint32 error_code = 1;
+  string error_message = 2;
+  ErrorCategory category = 3;
+  SuggestedAction suggested_action = 4;
+  string error_context = 5;       // Additional context information
+  Timestamp timestamp = 6;
+  ModuleIdentity source_module = 7;
+}
+
+// State transition messages
+message StateTransition {
+  enum State {
+    UNKNOWN = 0;
+    INITIALIZING = 1;
+    READY = 2;
+    RUNNING = 3;
+    PAUSED = 4;
+    STOPPING = 5;
+    STOPPED = 6;
+    ERROR = 7;
+    MAINTENANCE = 8;
+  }
+  
+  State previous_state = 1;
+  State current_state = 2;
+  string reason = 3;              // Human-readable reason for transition
+  Timestamp transition_time = 4;
+  ModuleIdentity module = 5;
+  uint32 timeout_seconds = 6;     // State timeout (0 = no timeout)
+}
+
+// Heartbeat message
+message Heartbeat {
+  ModuleIdentity module = 1;
+  Timestamp timestamp = 2;
+  StateTransition.State current_state = 3;
+  NetworkStatus network_status = 4;
+  uint32 sequence_number = 5;
+  
+  // Health indicators
+  double cpu_usage_percent = 6;
+  double memory_usage_mb = 7;
+  uint32 active_connections = 8;
+  uint32 queue_depth = 9;
+  bool is_healthy = 10;           // Overall health status
+}
+
+// Request/Response correlation
+message RequestResponse {
+  string correlation_id = 1;      // UUID for request/response correlation
+  Timestamp request_timestamp = 2;
+  ModuleIdentity requesting_module = 3;
+  ModuleIdentity responding_module = 4;
+  
+  oneof payload {
+    StatusRequest status_request = 10;
+    StatusResponse status_response = 11;
+    ConfigRequest config_request = 12;
+    ConfigResponse config_response = 13;
+    ControlCommand control_command = 14;
+    ControlResponse control_response = 15;
+  }
+}
+
+// Status request/response
+message StatusRequest {
+  bool include_network_status = 1;
+  bool include_performance_metrics = 2;
+  bool include_configuration = 3;
+}
+
+message StatusResponse {
+  ModuleIdentity module = 1;
+  StateTransition.State current_state = 2;
+  NetworkStatus network_status = 3;
+  string configuration_hash = 4;  // MD5 hash of current configuration
+  Timestamp status_timestamp = 5;
+  
+  // Performance metrics
+  message PerformanceMetrics {
+    double avg_processing_time_ms = 1;
+    double max_processing_time_ms = 2;
+    uint64 events_processed = 3;
+    uint64 errors_encountered = 4;
+    double throughput_events_per_second = 5;
+  }
+  PerformanceMetrics performance = 6;
+}
+
+// Configuration request/response
+message ConfigRequest {
+  enum ConfigAction {
+    GET_CURRENT = 0;
+    VALIDATE_NEW = 1;
+    APPLY_NEW = 2;
+    GET_SCHEMA = 3;
+  }
+  
+  ConfigAction action = 1;
+  string new_config_json = 2;     // JSON configuration (for VALIDATE_NEW/APPLY_NEW)
+}
+
+message ConfigResponse {
+  bool success = 1;
+  string current_config_json = 2;
+  string validation_errors = 3;   // If validation failed
+  string config_schema_json = 4;  // JSON schema for configuration
+}
+
+// Control commands
+message ControlCommand {
+  enum Command {
+    UNKNOWN_COMMAND = 0;
+    START = 1;
+    STOP = 2;
+    PAUSE = 3;
+    RESUME = 4;
+    RESTART = 5;
+    SHUTDOWN = 6;
+    EMERGENCY_STOP = 7;
+    RESET_STATISTICS = 8;
+    RECONNECT_ALL = 9;
+    FLUSH_BUFFERS = 10;
+  }
+  
+  Command command = 1;
+  string parameters = 2;          // JSON parameters for command
+  uint32 timeout_seconds = 3;     // Command timeout
+  bool force = 4;                 // Force command execution
+}
+
+message ControlResponse {
+  bool success = 1;
+  string result_message = 2;
+  ErrorInfo error = 3;            // If success = false
+  Timestamp execution_time = 4;
+}
+
+// Top-level control message wrapper
+message ControlMessage {
+  // Message identification
+  string message_id = 1;          // Unique message ID (UUID)
+  uint32 protocol_version = 2;    // Protocol version (currently 1)
+  Timestamp timestamp = 3;
+  ModuleIdentity sender = 4;
+  
+  // Message priority (0 = lowest, 255 = highest)
+  uint32 priority = 5;
+  
+  // Message type and payload
+  oneof message_type {
+    Heartbeat heartbeat = 10;
+    StateTransition state_transition = 11;
+    ErrorInfo error_info = 12;
+    RequestResponse request_response = 13;
+    NetworkStatus network_status = 14;
+  }
+  
+  // Optional metadata
+  map<string, string> metadata = 20;
+}
+
+// Batch message for efficiency
+message ControlMessageBatch {
+  repeated ControlMessage messages = 1;
+  uint32 batch_sequence_number = 2;
+  Timestamp batch_timestamp = 3;
+  ModuleIdentity batch_sender = 4;
+}

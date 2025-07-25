@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DELILA Network Library Configuration Schema",
+  "description": "Schema for validating DELILA network library configuration files",
+  "type": "object",
+  "required": ["delila_net"],
+  "properties": {
+    "delila_net": {
+      "type": "object",
+      "required": ["version", "profiles", "active_profile"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "Configuration format version"
+        },
+        "active_profile": {
+          "type": "string",
+          "description": "Active configuration profile name"
+        },
+        "profiles": {
+          "type": "object",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-zA-Z][a-zA-Z0-9_-]*$": {
+              "$ref": "#/definitions/profile"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "profile": {
+      "type": "object",
+      "required": ["buffer_settings", "performance", "error_handling", "network", "logging", "endpoints"],
+      "properties": {
+        "buffer_settings": {
+          "type": "object",
+          "required": ["high_water_mark", "receive_buffer_size", "buffer_pool_size_gb"],
+          "properties": {
+            "high_water_mark": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000,
+              "description": "ZeroMQ high water mark (number of messages)"
+            },
+            "receive_buffer_size": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50000,
+              "description": "Internal receive buffer size (number of messages)"
+            },
+            "buffer_pool_size_gb": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1024,
+              "description": "Pre-allocated buffer pool size in GB"
+            }
+          },
+          "additionalProperties": false
+        },
+        "performance": {
+          "type": "object",
+          "required": ["compression", "timeout_ms"],
+          "properties": {
+            "compression": {
+              "type": "object",
+              "required": ["enabled", "level", "algorithm"],
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable/disable compression"
+                },
+                "level": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 12,
+                  "description": "Compression level (1=fast, 12=best)"
+                },
+                "algorithm": {
+                  "type": "string",
+                  "enum": ["lz4", "zstd", "snappy"],
+                  "description": "Compression algorithm"
+                }
+              },
+              "additionalProperties": false
+            },
+            "timeout_ms": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 300000,
+              "description": "Network operation timeout in milliseconds"
+            }
+          },
+          "additionalProperties": false
+        },
+        "error_handling": {
+          "type": "object",
+          "required": ["gap_detection", "retry_policy"],
+          "properties": {
+            "gap_detection": {
+              "type": "object",
+              "required": ["alert_threshold", "alert_window_minutes"],
+              "properties": {
+                "alert_threshold": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000,
+                  "description": "Number of gaps before alerting"
+                },
+                "alert_window_minutes": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 60,
+                  "description": "Time window for gap counting"
+                }
+              },
+              "additionalProperties": false
+            },
+            "retry_policy": {
+              "type": "object",
+              "required": ["max_attempts", "initial_interval_ms", "max_interval_ms", "backoff_multiplier"],
+              "properties": {
+                "max_attempts": {
+                  "type": "integer",
+                  "minimum": -1,
+                  "description": "Maximum retry attempts (-1 = infinite)"
+                },
+                "initial_interval_ms": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 60000,
+                  "description": "Initial retry interval in milliseconds"
+                },
+                "max_interval_ms": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 300000,
+                  "description": "Maximum retry interval in milliseconds"
+                },
+                "backoff_multiplier": {
+                  "type": "number",
+                  "minimum": 1.0,
+                  "maximum": 10.0,
+                  "description": "Exponential backoff multiplier"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "network": {
+          "type": "object",
+          "required": ["default_interface", "default_transport", "tcp_settings", "ipc_settings"],
+          "properties": {
+            "default_interface": {
+              "type": "string",
+              "description": "Default network interface (empty = auto-detect)"
+            },
+            "default_transport": {
+              "type": "string",
+              "enum": ["auto", "tcp", "ipc"],
+              "description": "Default transport type"
+            },
+            "tcp_settings": {
+              "type": "object",
+              "required": ["no_delay", "keep_alive", "linger_ms"],
+              "properties": {
+                "no_delay": {
+                  "type": "boolean",
+                  "description": "Disable Nagle's algorithm for low latency"
+                },
+                "keep_alive": {
+                  "type": "boolean",
+                  "description": "Enable TCP keep-alive"
+                },
+                "linger_ms": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 60000,
+                  "description": "Socket linger time in milliseconds"
+                }
+              },
+              "additionalProperties": false
+            },
+            "ipc_settings": {
+              "type": "object",
+              "required": ["temp_directory"],
+              "properties": {
+                "temp_directory": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Temporary directory for IPC sockets"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "logging": {
+          "type": "object",
+          "required": ["level", "connection_events", "performance_metrics", "sequence_gaps"],
+          "properties": {
+            "level": {
+              "type": "string",
+              "enum": ["trace", "debug", "info", "warn", "error", "fatal"],
+              "description": "Logging level"
+            },
+            "connection_events": {
+              "type": "boolean",
+              "description": "Log connection events"
+            },
+            "performance_metrics": {
+              "type": "boolean",
+              "description": "Log performance metrics"
+            },
+            "sequence_gaps": {
+              "type": "boolean",
+              "description": "Log sequence gaps"
+            }
+          },
+          "additionalProperties": false
+        },
+        "endpoints": {
+          "type": "object",
+          "required": ["data_publisher", "control_server", "status_collector"],
+          "properties": {
+            "data_publisher": {
+              "type": "string",
+              "pattern": "^(tcp|ipc)://[^\\s]+$",
+              "description": "Data publisher endpoint"
+            },
+            "control_server": {
+              "type": "string",
+              "pattern": "^(tcp|ipc)://[^\\s]+$",
+              "description": "Control server endpoint"
+            },
+            "status_collector": {
+              "type": "string",
+              "pattern": "^(tcp|ipc)://[^\\s]+$",
+              "description": "Status collector endpoint"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

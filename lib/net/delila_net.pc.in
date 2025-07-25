@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: DELILA Network Library
+Description: High-performance networking library for DELILA DAQ software using ZeroMQ
+Version: @PROJECT_VERSION@
+Requires: libzmq >= 4.3.0, liblz4 >= 1.9.0, protobuf >= 3.0
+Libs: -L${libdir} -ldelila_net
+Cflags: -I${includedir}
