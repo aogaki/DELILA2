@@ -53,3 +53,5 @@ test_results/
 # OS files
 .DS_Store
 Thumbs.db
+
+.serena
