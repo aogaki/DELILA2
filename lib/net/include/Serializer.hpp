@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <queue>
 #include <utility>
 #include <vector>
 
@@ -40,6 +42,13 @@ class Serializer
   void EnableCompression(bool enable) { fCompressionEnabled = enable; }
   void EnableChecksum(bool enable) { fChecksumEnabled = enable; }
 
+  // Buffer pool optimization functions (Phase 3)
+  void EnableBufferPool(bool enable);
+  bool IsBufferPoolEnabled() const;
+  void SetBufferPoolSize(size_t size);
+  size_t GetBufferPoolSize() const;
+  size_t GetPooledBufferCount() const;
+
   std::unique_ptr<std::vector<uint8_t>> Encode(
       const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events,
       uint64_t sequenceNumber = 0);
@@ -52,6 +61,12 @@ class Serializer
   bool fCompressionEnabled = true;  // Enable compression by default
   bool fChecksumEnabled = true;     // Enable checksum by default
   uint32_t fFormatVersion = 1;      // Initial format version
+
+  // Buffer pool settings (Phase 3 optimization)
+  bool fBufferPoolEnabled = true;    // Default enabled for performance
+  size_t fBufferPoolSize = 20;       // Default pool size
+  std::queue<std::unique_ptr<std::vector<uint8_t>>> fBufferPool;
+  mutable std::mutex fBufferPoolMutex;  // Thread safety for pool access
 
   // Compression and checksum methods
   std::unique_ptr<std::vector<uint8_t>> Compress(
@@ -72,6 +87,10 @@ class Serializer
 
   std::unique_ptr<std::vector<std::unique_ptr<EventData>>> Deserialize(
       const std::unique_ptr<std::vector<uint8_t>> &input);
+
+  // Buffer pool helper methods (Phase 3)
+  std::unique_ptr<std::vector<uint8_t>> GetBufferFromPool();
+  void ReturnBufferToPool(std::unique_ptr<std::vector<uint8_t>> buffer);
 };
 
 }  // namespace DELILA::Net

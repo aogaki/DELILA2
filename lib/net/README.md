@@ -81,8 +81,9 @@ auto [decoded_events, sequence_num] = serializer.Decode(encoded);
 
 ### 3. ZMQTransport
 
-ZeroMQ-based transport layer:
+ZeroMQ-based transport layer with multiple configuration options:
 
+#### Traditional C++ Configuration
 ```cpp
 #include "ZMQTransport.hpp"
 using namespace DELILA::Net;
@@ -103,6 +104,32 @@ transport->Send(events);
 
 // Receive data (on subscriber side)
 auto [received_events, seq] = transport->Receive();
+```
+
+#### JSON Configuration (Recommended)
+```cpp
+#include <nlohmann/json.hpp>
+
+// Method 1: From JSON object
+nlohmann::json config = {
+    {"data_address", "tcp://localhost:5555"},
+    {"status_address", "tcp://localhost:5556"},
+    {"bind_data", true},
+    {"is_publisher", true},
+    {"compression", true},
+    {"checksum", true},
+    {"zero_copy", false},
+    {"memory_pool_enabled", true},
+    {"memory_pool_size", 20}
+};
+
+auto transport = std::make_unique<ZMQTransport>();
+transport->ConfigureFromJSON(config);
+transport->Connect();
+
+// Method 2: From JSON file
+transport->ConfigureFromFile("config.json");
+transport->Connect();
 ```
 
 ## Communication Patterns
@@ -176,7 +203,90 @@ if (response.success) {
 
 ## Configuration Options
 
-### TransportConfig Structure
+### JSON Configuration (Recommended)
+
+The ZMQTransport now supports flexible JSON-based configuration following the KISS principle:
+
+#### JSON Configuration Schema
+```json
+{
+  "data_address": "tcp://localhost:5555",
+  "status_address": "tcp://localhost:5556",
+  "command_address": "tcp://localhost:5557",
+  "bind_data": true,
+  "bind_status": true,
+  "bind_command": false,
+  "is_publisher": true,
+  "compression": true,
+  "checksum": true,
+  "zero_copy": false,
+  "memory_pool_enabled": true,
+  "memory_pool_size": 20,
+  "receive_timeout_ms": 1000
+}
+```
+
+#### Configuration Methods
+
+**From JSON Object:**
+```cpp
+#include <nlohmann/json.hpp>
+
+nlohmann::json config = {
+    {"data_address", "tcp://localhost:5555"},
+    {"is_publisher", true},
+    {"compression", false},
+    {"memory_pool_size", 50}
+};
+
+auto transport = std::make_unique<ZMQTransport>();
+bool success = transport->ConfigureFromJSON(config);
+```
+
+**From JSON File:**
+```cpp
+// Create config.json file first
+auto transport = std::make_unique<ZMQTransport>();
+bool success = transport->ConfigureFromFile("config.json");
+```
+
+#### Configuration Field Reference
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `data_address` | string | "tcp://localhost:5555" | ZeroMQ address for data transport |
+| `status_address` | string | "tcp://localhost:5556" | ZeroMQ address for status messages |
+| `command_address` | string | "tcp://localhost:5557" | ZeroMQ address for commands |
+| `bind_data` | bool | true | Bind (true) or connect (false) data socket |
+| `bind_status` | bool | true | Bind (true) or connect (false) status socket |
+| `bind_command` | bool | false | Bind (true) or connect (false) command socket |
+| `is_publisher` | bool | true | Publisher (true) or subscriber (false) role |
+| `compression` | bool | true | Enable LZ4 compression |
+| `checksum` | bool | true | Enable xxHash checksums |
+| `zero_copy` | bool | false | Enable zero-copy optimization |
+| `memory_pool_enabled` | bool | true | Enable memory pool for containers |
+| `memory_pool_size` | int | 20 | Maximum containers in memory pool |
+| `receive_timeout_ms` | int | 1000 | Socket receive timeout (planned) |
+
+#### Error Handling
+```cpp
+// All configuration methods return bool for success/failure
+if (!transport->ConfigureFromJSON(config)) {
+    std::cerr << "JSON configuration failed
+";
+    // Check JSON syntax, field types, and required fields
+}
+
+if (!transport->ConfigureFromFile("config.json")) {
+    std::cerr << "File configuration failed
+";  
+    // Check file exists, is readable, and contains valid JSON
+}
+```
+
+### Legacy TransportConfig Structure
+
+For backward compatibility, the original C++ configuration still works:
 
 ```cpp
 struct TransportConfig {
@@ -290,8 +400,55 @@ std::cout << "Serialization took: " << duration.count() << " μs\n";
 See the `examples/` directory for complete toy programs:
 
 - `sender.cpp`: Data publisher with random EventData generation
-- `receiver.cpp`: Data subscriber with performance measurement
+- `receiver.cpp`: Data subscriber with performance measurement  
 - `performance_test.cpp`: Comprehensive benchmarking suite
+- `json_config_demo.cpp`: JSON configuration demonstration
+
+### JSON Configuration Example
+
+A complete example showing all JSON configuration features:
+
+```cpp
+#include <iostream>
+#include <nlohmann/json.hpp>
+#include "ZMQTransport.hpp"
+
+int main() {
+    // Method 1: Configure from JSON object
+    nlohmann::json config = {
+        {"data_address", "tcp://localhost:5555"},
+        {"is_publisher", true},
+        {"compression", false},
+        {"zero_copy", true},
+        {"memory_pool_size", 10}
+    };
+    
+    auto transport = std::make_unique<ZMQTransport>();
+    if (transport->ConfigureFromJSON(config)) {
+        std::cout << "JSON configuration successful!
+";
+        std::cout << "Zero Copy: " << transport->IsZeroCopyEnabled() << "
+";
+        std::cout << "Pool Size: " << transport->GetMemoryPoolSize() << "
+";
+    }
+    
+    // Method 2: Configure from file
+    if (transport->ConfigureFromFile("example_config.json")) {
+        std::cout << "File configuration successful!
+";
+    }
+    
+    return 0;
+}
+```
+
+Run the demo:
+```bash
+# Compile and run the JSON configuration demo
+g++ -std=c++17 -Iinclude -I/opt/homebrew/include json_config_demo.cpp -o demo
+./demo
+```
 
 ## API Reference
 

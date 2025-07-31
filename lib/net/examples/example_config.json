@@ -1,0 +1,17 @@
+{
+    "transport": {
+        "data_channel": {
+            "address": "tcp://localhost:5555",
+            "pattern": "PUB",
+            "bind": true
+        },
+        "status_channel": {
+            "address": "tcp://localhost:5556",
+            "bind": true
+        },
+        "command_channel": {
+            "address": "tcp://localhost:5557",
+            "bind": false
+        }
+    }
+}

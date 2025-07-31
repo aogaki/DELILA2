@@ -34,7 +34,7 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Encode(
   header.timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
       std::chrono::system_clock::now().time_since_epoch()).count();
   
-  // Serialize event data
+  // Serialize event data using buffer pool for intermediate work
   auto serializedData = Serialize(events);
   if (!serializedData) {
     return nullptr;
@@ -67,8 +67,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Encode(
   // Clear reserved fields
   std::memset(header.reserved, 0, sizeof(header.reserved));
   
-  // Create final output
-  auto result = std::make_unique<std::vector<uint8_t>>();
+  // Create final output using buffer pool (Phase 3 optimization)
+  auto result = GetBufferFromPool();
   result->reserve(sizeof(header) + (*dataToEncode ? (*dataToEncode)->size() : 0));
   
   // Write header
@@ -156,7 +156,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Compress(
   const int srcSize = static_cast<int>(data->size());
   const int maxCompressedSize = LZ4_compressBound(srcSize);
   
-  auto compressed = std::make_unique<std::vector<uint8_t>>(maxCompressedSize);
+  auto compressed = GetBufferFromPool();  // Phase 3: Use buffer pool
+  compressed->resize(maxCompressedSize);
   
   const int compressedSize = LZ4_compress_default(
       reinterpret_cast<const char*>(data->data()),
@@ -165,7 +166,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Compress(
       maxCompressedSize);
   
   if (compressedSize <= 0) {
-    // Compression failed
+    // Compression failed - return buffer to pool
+    ReturnBufferToPool(std::move(compressed));
     return nullptr;
   }
   
@@ -177,7 +179,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Compress(
     return compressed;
   }
   
-  // If compression didn't save space, return nullptr to indicate no compression
+  // If compression didn't save space, return buffer to pool
+  ReturnBufferToPool(std::move(compressed));
   return nullptr;
 }
 std::unique_ptr<std::vector<uint8_t>> Serializer::Decompress(
@@ -192,7 +195,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Decompress(
   
   for (int multiplier : multipliers) {
     const int decompressedSize = static_cast<int>(data->size()) * multiplier;
-    auto decompressed = std::make_unique<std::vector<uint8_t>>(decompressedSize);
+    auto decompressed = GetBufferFromPool();  // Phase 3: Use buffer pool
+    decompressed->resize(decompressedSize);
     
     const int result = LZ4_decompress_safe(
         reinterpret_cast<const char*>(data->data()),
@@ -205,6 +209,9 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Decompress(
       decompressed->resize(result);
       return decompressed;
     }
+    
+    // This attempt failed - return buffer to pool and try next multiplier
+    ReturnBufferToPool(std::move(decompressed));
   }
   
   // Decompression failed with all attempted sizes
@@ -219,7 +226,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Decompress(
     return nullptr;
   }
   
-  auto decompressed = std::make_unique<std::vector<uint8_t>>(uncompressedSize);
+  auto decompressed = GetBufferFromPool();  // Phase 3: Use buffer pool
+  decompressed->resize(uncompressedSize);
   
   const int result = LZ4_decompress_safe(
       reinterpret_cast<const char*>(data->data()),
@@ -231,7 +239,8 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Decompress(
     return decompressed;
   }
   
-  // Decompression failed or size mismatch
+  // Decompression failed or size mismatch - return buffer to pool
+  ReturnBufferToPool(std::move(decompressed));
   return nullptr;
 }
 
@@ -258,10 +267,10 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Serialize(
     const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events)
 {
   if (!events || events->empty()) {
-    return std::make_unique<std::vector<uint8_t>>();
+    return GetBufferFromPool();  // Return empty buffer from pool
   }
 
-  auto result = std::make_unique<std::vector<uint8_t>>();
+  auto result = GetBufferFromPool();  // Phase 3: Use buffer pool
   
   // Reserve approximate space to avoid reallocations
   size_t approxSize = events->size() * (Digitizer::EVENTDATA_SIZE + 1000); // Extra space for waveforms
@@ -428,6 +437,81 @@ Serializer::Deserialize(const std::unique_ptr<std::vector<uint8_t>> &input)
   }
   
   return events;
+}
+
+// ==========================================
+// Buffer Pool Optimization Implementation (Phase 3)
+// ==========================================
+
+void Serializer::EnableBufferPool(bool enable)
+{
+  fBufferPoolEnabled = enable;
+}
+
+bool Serializer::IsBufferPoolEnabled() const
+{
+  return fBufferPoolEnabled;
+}
+
+void Serializer::SetBufferPoolSize(size_t size)
+{
+  if (size == 0) {
+    fBufferPoolSize = 20;  // Reset to default
+  } else {
+    fBufferPoolSize = size;
+  }
+}
+
+size_t Serializer::GetBufferPoolSize() const
+{
+  return fBufferPoolSize;
+}
+
+size_t Serializer::GetPooledBufferCount() const
+{
+  std::lock_guard<std::mutex> lock(fBufferPoolMutex);
+  return fBufferPool.size();
+}
+
+std::unique_ptr<std::vector<uint8_t>> Serializer::GetBufferFromPool()
+{
+  if (!fBufferPoolEnabled) {
+    // If pool is disabled, always return a new buffer
+    return std::make_unique<std::vector<uint8_t>>();
+  }
+  
+  std::lock_guard<std::mutex> lock(fBufferPoolMutex);
+  
+  if (!fBufferPool.empty()) {
+    // Get buffer from pool
+    auto buffer = std::move(fBufferPool.front());
+    fBufferPool.pop();
+    
+    // Clear the buffer for reuse
+    buffer->clear();
+    return buffer;
+  }
+  
+  // Pool is empty, create new buffer
+  return std::make_unique<std::vector<uint8_t>>();
+}
+
+void Serializer::ReturnBufferToPool(std::unique_ptr<std::vector<uint8_t>> buffer)
+{
+  if (!fBufferPoolEnabled || !buffer) {
+    // If pool is disabled or buffer is null, just let it be destroyed
+    return;
+  }
+  
+  std::lock_guard<std::mutex> lock(fBufferPoolMutex);
+  
+  // Only return to pool if we haven't exceeded the maximum pool size
+  if (fBufferPool.size() < fBufferPoolSize) {
+    // Clear the buffer and return to pool
+    buffer->clear();
+    fBufferPool.push(std::move(buffer));
+  }
+  // If pool is full, let the buffer be destroyed naturally
 }
 
 }  // namespace DELILA::Net

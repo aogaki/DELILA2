@@ -121,30 +121,68 @@ set(COMMON_LIBRARIES
     ${ZMQ_LIBRARIES}
 )
 
-# Sender executable
-add_executable(sender sender.cpp)
-target_include_directories(sender PRIVATE ${COMMON_INCLUDE_DIRS})
-target_link_libraries(sender ${COMMON_LIBRARIES})
+# Find Google Test for example tests (optional, not currently used)
+# find_package(GTest QUIET)
+# if(NOT GTest_FOUND)
+#     # Try to find it manually
+#     find_path(GTEST_INCLUDE_DIR gtest/gtest.h PATHS /opt/homebrew/include /usr/local/include /usr/include)
+#     find_library(GTEST_LIBRARY gtest PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
+#     find_library(GTEST_MAIN_LIBRARY gtest_main PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
+#     
+#     if(GTEST_INCLUDE_DIR AND GTEST_LIBRARY AND GTEST_MAIN_LIBRARY)
+#         set(GTEST_FOUND TRUE)
+#         set(GTEST_INCLUDE_DIRS ${GTEST_INCLUDE_DIR})
+#         set(GTEST_LIBRARIES ${GTEST_LIBRARY} ${GTEST_MAIN_LIBRARY})
+#     endif()
+# endif()
 
-# Receiver executable
-add_executable(receiver receiver.cpp)
-target_include_directories(receiver PRIVATE ${COMMON_INCLUDE_DIRS})
-target_link_libraries(receiver ${COMMON_LIBRARIES})
-
-# Performance test executable
-add_executable(performance_test performance_test.cpp)
-target_include_directories(performance_test PRIVATE ${COMMON_INCLUDE_DIRS})
-target_link_libraries(performance_test ${COMMON_LIBRARIES})
-
-# Set target properties
-set_target_properties(sender receiver performance_test PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF
+# Define all examples
+set(EXAMPLES
+    pubsub_publisher
+    pubsub_subscriber
+    push_pull_pusher
+    push_pull_puller
+    command_server
+    command_client
+    status_reporter
+    status_monitor
+    config_example
+    throughput_test
+    memory_pool_example
+    robust_client
+    simple_test
+    test_command
+    one_to_many_demo
+    broadcast_vs_loadbalance
+    filtered_broadcast
 )
 
-# Installation (optional)
-install(TARGETS sender receiver performance_test
+# Create executables for all examples
+foreach(example ${EXAMPLES})
+    add_executable(${example} ${example}.cpp)
+    target_include_directories(${example} PRIVATE ${COMMON_INCLUDE_DIRS})
+    target_link_libraries(${example} ${COMMON_LIBRARIES})
+    set_target_properties(${example} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endforeach()
+
+# Build tests if GTest is found
+# Note: Example tests are not yet implemented
+# if(GTEST_FOUND)
+#     enable_testing()
+#     
+#     # TODO: Add example tests here
+#     
+#     message(STATUS "Example tests will be built")
+# else()
+#     message(STATUS "Google Test not found - example tests will not be built")
+# endif()
+
+# Installation
+install(TARGETS ${EXAMPLES}
     RUNTIME DESTINATION bin
 )
 

@@ -210,6 +210,92 @@ struct TransportConfig {
 - **Testing**: Full unit test coverage
 - **Documentation**: Clear API documentation and usage examples
 
+## JSON Configuration Implementation ✅
+
+**Status: COMPLETED** - The ZMQTransport class now supports flexible JSON-based configuration as specified in the requirements.
+
+### Configuration Methods
+
+The implementation provides three configuration approaches following KISS principles:
+
+#### 1. JSON Object Configuration
+```cpp
+#include <nlohmann/json.hpp>
+
+nlohmann::json config = {
+    {"data_address", "tcp://localhost:5555"},
+    {"status_address", "tcp://localhost:5556"},
+    {"command_address", "tcp://localhost:5557"},
+    {"bind_data", true},
+    {"is_publisher", true},
+    {"compression", true},
+    {"zero_copy", false},
+    {"memory_pool_size", 20}
+};
+
+auto transport = std::make_unique<ZMQTransport>();
+bool success = transport->ConfigureFromJSON(config);
+```
+
+#### 2. JSON File Configuration
+```cpp
+// config.json file contains the JSON configuration
+bool success = transport->ConfigureFromFile("config.json");
+```
+
+#### 3. Legacy C++ Configuration (Backward Compatible)
+```cpp
+TransportConfig config;
+config.data_address = "tcp://localhost:5555";
+bool success = transport->Configure(config);
+```
+
+### Supported Configuration Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `data_address` | string | "tcp://localhost:5555" | Data transport address |
+| `status_address` | string | "tcp://localhost:5556" | Status messages address |
+| `command_address` | string | "tcp://localhost:5557" | Command messages address |
+| `bind_data` | bool | true | Bind vs connect for data socket |
+| `bind_status` | bool | true | Bind vs connect for status socket |
+| `bind_command` | bool | false | Bind vs connect for command socket |
+| `is_publisher` | bool | true | Publisher vs subscriber role |
+| `compression` | bool | true | Enable LZ4 compression |
+| `checksum` | bool | true | Enable xxHash checksums |
+| `zero_copy` | bool | false | Enable zero-copy optimization |
+| `memory_pool_enabled` | bool | true | Enable container memory pool |
+| `memory_pool_size` | int | 20 | Memory pool container limit |
+
+### Implementation Features
+
+- **Error Handling**: Robust JSON parsing with graceful fallbacks
+- **Validation**: Automatic validation of configuration parameters  
+- **Defaults**: Sensible defaults for all optional fields
+- **Performance**: Direct integration with existing performance optimizations
+- **Testing**: Comprehensive TDD test suite covering all scenarios
+
+### Example JSON Configuration File
+```json
+{
+  "data_address": "tcp://localhost:5555",
+  "status_address": "tcp://localhost:5556", 
+  "command_address": "tcp://localhost:5557",
+  "bind_data": true,
+  "bind_status": true,
+  "bind_command": false,
+  "is_publisher": true,
+  "compression": true,
+  "checksum": true,
+  "zero_copy": false,
+  "memory_pool_enabled": true,
+  "memory_pool_size": 20,
+  "receive_timeout_ms": 1000
+}
+```
+
+This implementation satisfies the requirements for "Runtime configuration of addresses, ports, and patterns" with a modern, flexible JSON-based approach.
+
 ## Implementation Considerations
 
 ### Dependencies
