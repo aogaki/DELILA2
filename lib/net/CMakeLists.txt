@@ -12,8 +12,8 @@ pkg_check_modules(ZMQ REQUIRED libzmq)
 
 # Alternative ZeroMQ setup for macOS/Homebrew
 if(NOT ZMQ_FOUND)
-    find_path(ZMQ_INCLUDE_DIR zmq.h PATHS /opt/homebrew/include /usr/local/include)
-    find_library(ZMQ_LIBRARY zmq PATHS /opt/homebrew/lib /usr/local/lib)
+    find_path(ZMQ_INCLUDE_DIR zmq.h PATHS /opt/homebrew/include /usr/local/include /usr/include)
+    find_library(ZMQ_LIBRARY zmq PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
     if(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARY)
         set(ZMQ_FOUND TRUE)
         set(ZMQ_INCLUDE_DIRS ${ZMQ_INCLUDE_DIR})
@@ -25,6 +25,7 @@ endif()
 add_library(delila_net
     src/Serializer.cpp
     src/ZMQTransport.cpp
+    src/EventData.cpp
 )
 
 # Add include directories
