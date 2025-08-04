@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "DataType.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "IDecoder.hpp"
 #include "PSD2Constants.hpp"
 #include "PSD2Structures.hpp"

@@ -14,7 +14,7 @@ endif()
 message(STATUS "Net library using parent ZMQ config: ${ZMQ_LIBRARIES}")
 
 # Create the library
-add_library(delila_net
+add_library(delila_net OBJECT
     src/Serializer.cpp
     src/ZMQTransport.cpp
     src/EventData.cpp

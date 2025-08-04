@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 
 using DELILA::Digitizer::EventData;
 

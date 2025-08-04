@@ -3,17 +3,77 @@
 
 /**
  * @file delila.hpp
- * @brief Main header for DELILA2 unified library
+ * @brief Main umbrella header for DELILA2 unified library
  * 
  * This header provides access to all DELILA2 components:
- * - Digitizer library for hardware interface
- * - Network library for data transport
+ * - Digitizer library for hardware interface and data acquisition
+ * - Network library for high-performance data transport and serialization
+ * 
+ * Usage:
+ *   #include <delila/delila.hpp>
+ * 
+ * This includes all public APIs. For selective inclusion, use individual headers:
+ * - For core data structures: #include "delila/core/EventData.hpp"
+ * - For digitizer only: #include "delila/digitizer/Digitizer.hpp"
+ * - For network only: #include "delila/net/ZMQTransport.hpp"
  */
 
-// Forward declarations to avoid symbol conflicts
-// Users should include specific headers as needed:
-// - For network: #include "lib/net/include/ZMQTransport.hpp"
-// - For digitizer: #include "lib/digitizer/include/Digitizer.hpp"
+// ============================================================================
+// CORE LIBRARY HEADERS
+// ============================================================================
+
+// Core data structures shared across all DELILA2 components
+#include "delila/core/EventData.hpp"
+#include "delila/core/DataType.hpp"
+
+// ============================================================================
+// DIGITIZER LIBRARY HEADERS
+// ============================================================================
+
+// Main digitizer interface
+#include "delila/digitizer/Digitizer.hpp"
+
+// Digitizer library implementation headers
+#include "delila/digitizer/IDigitizer.hpp"
+#include "delila/digitizer/Digitizer1.hpp"
+#include "delila/digitizer/Digitizer2.hpp"
+#include "delila/digitizer/DigitizerFactory.hpp"
+#include "delila/digitizer/ConfigurationManager.hpp"
+
+// Data processing and validation
+#include "delila/digitizer/RawData.hpp"
+#include "delila/digitizer/DataValidator.hpp"
+#include "delila/digitizer/ParameterValidator.hpp"
+
+// Decoder interfaces and implementations
+#include "delila/digitizer/IDecoder.hpp"
+#include "delila/digitizer/PSD1Decoder.hpp"
+#include "delila/digitizer/PSD2Decoder.hpp"
+#include "delila/digitizer/PHA1Decoder.hpp"
+
+// Hardware-specific constants and structures
+#include "delila/digitizer/PSD1Constants.hpp" 
+#include "delila/digitizer/PSD1Structures.hpp"
+#include "delila/digitizer/PSD2Constants.hpp"
+#include "delila/digitizer/PSD2Structures.hpp"
+#include "delila/digitizer/PHA1Constants.hpp"
+#include "delila/digitizer/PHA1Structures.hpp"
+
+// Utility classes
+#include "delila/digitizer/MemoryReader.hpp"
+#include "delila/digitizer/DecoderLogger.hpp"
+
+// ============================================================================
+// NETWORK LIBRARY HEADERS  
+// ============================================================================
+
+// Core network transport and serialization
+#include "delila/net/ZMQTransport.hpp"
+#include "delila/net/Serializer.hpp"
+
+// ============================================================================
+// LIBRARY UTILITIES AND VERSION INFO
+// ============================================================================
 
 /**
  * @namespace DELILA

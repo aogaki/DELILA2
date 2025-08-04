@@ -11,7 +11,7 @@
 
 #include "ConfigurationManager.hpp"
 #include "PSD2Decoder.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "IDigitizer.hpp"
 #include "ParameterValidator.hpp"
 #include "RawData.hpp"

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "ConfigurationManager.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 
 namespace DELILA
 {

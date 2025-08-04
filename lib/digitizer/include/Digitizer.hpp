@@ -5,7 +5,7 @@
 #include <string>
 
 #include "ConfigurationManager.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "IDigitizer.hpp"
 
 namespace DELILA

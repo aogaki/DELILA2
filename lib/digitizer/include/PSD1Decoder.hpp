@@ -11,7 +11,7 @@
 #include "DataType.hpp"
 #include "DataValidator.hpp"
 #include "DecoderLogger.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "IDecoder.hpp"
 #include "MemoryReader.hpp"
 #include "PSD1Constants.hpp"

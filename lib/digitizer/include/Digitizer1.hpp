@@ -13,7 +13,7 @@
 #include "IDecoder.hpp"
 #include "PHA1Decoder.hpp"
 #include "PSD1Decoder.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "IDigitizer.hpp"
 #include "ParameterValidator.hpp"
 #include "RawData.hpp"

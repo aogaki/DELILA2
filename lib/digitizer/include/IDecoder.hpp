@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "DataType.hpp"
-#include "EventData.hpp"
+#include "../../../include/delila/core/EventData.hpp"
 #include "RawData.hpp"
 
 namespace DELILA

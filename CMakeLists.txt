@@ -118,14 +118,23 @@ if(CAEN_FELIB)
 endif()
 
 # Add subdirectories
-add_subdirectory(lib/digitizer)
-add_subdirectory(lib/net)
+# Component libraries built directly into DELILA
+# add_subdirectory(lib/digitizer)
+# add_subdirectory(lib/net)
 
-# Create a main library source file
+# Collect all source files from lib subdirectories, excluding duplicates
+file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
+file(GLOB_RECURSE NET_SOURCES "lib/net/src/*.cpp")
+
+# Remove duplicate EventData.cpp - use digitizer version
+list(FILTER NET_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
+
+set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES})
+
+# Create a simple main source file for version info
 set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
 file(WRITE ${DELILA_MAIN_SOURCE} 
 "// Main source file for DELILA library
-#include \"delila/delila.hpp\"
 #include <iostream>
 
 namespace DELILA {
@@ -133,61 +142,51 @@ namespace DELILA {
         return \"${PROJECT_VERSION}\";
     }
     
-    bool initialize(const char* config_path) {
-        // Initialize network component
-        // Initialize digitizer component if needed
+    bool initialize(const char* config_path = nullptr) {
         std::cout << \"DELILA2 v\" << getVersion() << \" initialized\" << std::endl;
         return true;
     }
     
     void shutdown() {
-        // Cleanup network resources
-        // Cleanup digitizer resources
         std::cout << \"DELILA2 shutdown complete\" << std::endl;
     }
 }
 ")
 
-# Create unified DELILA as shared library that combines all components
-add_library(DELILA SHARED ${DELILA_MAIN_SOURCE})
-# Link component libraries with PRIVATE to avoid symbol conflicts
-target_link_libraries(DELILA PRIVATE delila_digitizer delila_net)
+# Create unified DELILA shared library with all sources
+add_library(DELILA SHARED 
+    ${DELILA_MAIN_SOURCE}
+    ${DELILA_SOURCES}
+)
 
-# Link optional dependencies if found
-if(ZMQ_FOUND)
-    target_link_libraries(DELILA PUBLIC ${ZMQ_LIBRARIES})
-endif()
-if(LZ4_FOUND)
-    target_link_libraries(DELILA PUBLIC ${LZ4_LIBRARIES})
-endif()
-if(XXHASH_FOUND)
-    target_link_libraries(DELILA PUBLIC ${XXHASH_LIBRARIES})
-endif()
-if(Protobuf_FOUND)
-    target_link_libraries(DELILA PUBLIC ${Protobuf_LIBRARIES})
-endif()
-if(CAEN_FELIB)
-    target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
-endif()
-
+# Add include directories
 target_include_directories(DELILA
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/digitizer/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/net/include>
         $<INSTALL_INTERFACE:include>
 )
 
-# Add optional include directories
+# Link external dependencies
 if(ZMQ_FOUND)
+    target_link_libraries(DELILA PUBLIC ${ZMQ_LIBRARIES})
     target_include_directories(DELILA PUBLIC ${ZMQ_INCLUDE_DIRS})
 endif()
 if(LZ4_FOUND)
+    target_link_libraries(DELILA PUBLIC ${LZ4_LIBRARIES})
     target_include_directories(DELILA PUBLIC ${LZ4_INCLUDE_DIRS})
 endif()
 if(XXHASH_FOUND)
+    target_link_libraries(DELILA PUBLIC ${XXHASH_LIBRARIES})
     target_include_directories(DELILA PUBLIC ${XXHASH_INCLUDE_DIRS})
 endif()
 if(Protobuf_FOUND)
+    target_link_libraries(DELILA PUBLIC ${Protobuf_LIBRARIES})
     target_include_directories(DELILA PUBLIC ${Protobuf_INCLUDE_DIRS})
+endif()
+if(CAEN_FELIB)
+    target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
 endif()
 
 # Compiler definitions
@@ -200,26 +199,55 @@ set_target_properties(DELILA PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
     PUBLIC_HEADER "include/delila/delila.hpp"
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
 )
 
 # Enable testing
 enable_testing()
 add_subdirectory(tests)
 
-# Add examples
-add_subdirectory(examples)
+# Add examples (commented out for standalone library build)
+# add_subdirectory(examples)
 
 # Install configuration
 install(TARGETS DELILA
+    EXPORT DELILA2Targets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
     RUNTIME DESTINATION bin
     PUBLIC_HEADER DESTINATION include/delila
 )
 
+# Install all headers with proper directory structure
 install(DIRECTORY include/delila
     DESTINATION include
     FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Install core library headers
+install(DIRECTORY include/delila/core/
+    DESTINATION include/delila/core
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Install digitizer library headers
+install(DIRECTORY lib/digitizer/include/
+    DESTINATION include/delila/digitizer
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Install network library headers  
+install(DIRECTORY lib/net/include/
+    DESTINATION include/delila/net
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Export targets for other CMake projects
+install(EXPORT DELILA2Targets
+    FILE DELILA2Targets.cmake
+    NAMESPACE DELILA2::
+    DESTINATION lib/cmake/DELILA2
 )
 
 # Package configuration

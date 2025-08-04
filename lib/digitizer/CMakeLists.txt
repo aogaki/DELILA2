@@ -14,7 +14,7 @@ file(GLOB_RECURSE DIGITIZER_HEADERS
 )
 
 # Create digitizer library
-add_library(delila_digitizer STATIC 
+add_library(delila_digitizer OBJECT 
     ${DIGITIZER_SOURCES}
     ${DIGITIZER_HEADERS}
 )
