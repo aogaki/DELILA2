@@ -33,15 +33,6 @@ target_link_libraries(delila_digitizer
     PUBLIC ${ROOT_LIBRARIES}
 )
 
-# Try to link RHTTP if available (part of ROOT)
-find_library(RHTTP_LIB RHTTP PATHS ${ROOT_LIBRARY_DIR})
-if(RHTTP_LIB)
-    target_link_libraries(delila_digitizer PRIVATE ${RHTTP_LIB})
-    message(STATUS "Found RHTTP: ${RHTTP_LIB}")
-else()
-    message(STATUS "RHTTP not found - building without RHTTP support")
-endif()
-
 # Try to link CAEN library if available
 find_library(CAEN_FELIB CAEN_FELib)
 if(CAEN_FELIB)
