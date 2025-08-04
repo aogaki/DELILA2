@@ -2,8 +2,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 # Find required dependencies for digitizer
-find_package(ROOT REQUIRED COMPONENTS RIO Net)
-include(${ROOT_USE_FILE})
+# ROOT dependency removed
 
 # Collect source and header files
 file(GLOB_RECURSE DIGITIZER_SOURCES 
@@ -26,12 +25,9 @@ target_include_directories(delila_digitizer
         $<INSTALL_INTERFACE:include/delila/digitizer>
     PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${ROOT_INCLUDE_DIRS}
 )
 
-target_link_libraries(delila_digitizer
-    PUBLIC ${ROOT_LIBRARIES}
-)
+# ROOT libraries removed - no external dependencies needed
 
 # Try to link CAEN library if available
 find_library(CAEN_FELIB CAEN_FELib)

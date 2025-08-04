@@ -4,7 +4,7 @@ include(CMakeFindDependencyMacro)
 
 # Find required dependencies
 find_dependency(PkgConfig REQUIRED)
-find_dependency(ROOT REQUIRED COMPONENTS RIO Net)
+# ROOT dependency removed
 find_dependency(Protobuf REQUIRED)
 
 # Find optional dependencies

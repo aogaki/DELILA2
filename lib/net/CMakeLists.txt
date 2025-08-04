@@ -146,7 +146,8 @@ install(TARGETS delila_net
 )
 
 install(DIRECTORY include/
-    DESTINATION include
+    DESTINATION include/delila/net
+    FILES_MATCHING PATTERN "*.hpp"
 )
 
 install(EXPORT DELILA_NetTargets
