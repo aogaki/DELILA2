@@ -55,6 +55,7 @@ test_results/
 Thumbs.db
 
 .serena
+.claude
 CMakeFiles
 CMakeCache.txt
 cmake_install.cmake
@@ -62,3 +63,5 @@ Makefile
 *.cmake
 
 TODO.md
+
+aogaki

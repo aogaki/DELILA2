@@ -10,15 +10,10 @@
  * - Network library for data transport
  */
 
-// Digitizer library headers
-#include <delila/digitizer/EventData.hpp>
-#include <delila/digitizer/Digitizer.hpp>
-#include <delila/digitizer/DataType.hpp>
-
-// Network library headers (when available)
-// #include <delila/net/serialization.hpp>
-// #include <delila/net/connection.hpp>
-// #include <delila/net/config.hpp>
+// Forward declarations to avoid symbol conflicts
+// Users should include specific headers as needed:
+// - For network: #include "lib/net/include/ZMQTransport.hpp"
+// - For digitizer: #include "lib/digitizer/include/Digitizer.hpp"
 
 /**
  * @namespace DELILA

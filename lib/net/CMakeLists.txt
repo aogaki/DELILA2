@@ -6,20 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Find ZeroMQ
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(ZMQ REQUIRED libzmq)
-
-# Alternative ZeroMQ setup for macOS/Homebrew
+# ZMQ configuration is inherited from parent project
+# Verify ZMQ was found in parent configuration
 if(NOT ZMQ_FOUND)
-    find_path(ZMQ_INCLUDE_DIR zmq.h PATHS /opt/homebrew/include /usr/local/include /usr/include)
-    find_library(ZMQ_LIBRARY zmq PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
-    if(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARY)
-        set(ZMQ_FOUND TRUE)
-        set(ZMQ_INCLUDE_DIRS ${ZMQ_INCLUDE_DIR})
-        set(ZMQ_LIBRARIES ${ZMQ_LIBRARY})
-    endif()
+    message(FATAL_ERROR "ZMQ not found - should be configured in parent project")
 endif()
+message(STATUS "Net library using parent ZMQ config: ${ZMQ_LIBRARIES}")
 
 # Create the library
 add_library(delila_net
@@ -99,20 +91,21 @@ find_package(GTest REQUIRED)
 # add_executable(test_patterns_only test_patterns_only.cpp)
 
 # Create Phase 1 integration test executable
-add_executable(test_zmq_transport_phase1_integration test_zmq_transport_phase1_integration.cpp)
-target_link_libraries(test_zmq_transport_phase1_integration 
-    delila_net
-    delila_digitizer
-    GTest::gtest
-    GTest::gtest_main
-    ${LZ4_LIBRARIES}
-    ${XXHASH_LIBRARIES}
-    ${ZMQ_LIBRARIES}
-)
-target_include_directories(test_zmq_transport_phase1_integration PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
-    ${ZMQ_INCLUDE_DIRS}
-)
+# NOTE: Commented out until test file is created
+# add_executable(test_zmq_transport_phase1_integration test_zmq_transport_phase1_integration.cpp)
+# target_link_libraries(test_zmq_transport_phase1_integration 
+#     delila_net
+#     delila_digitizer
+#     GTest::gtest
+#     GTest::gtest_main
+#     ${LZ4_LIBRARIES}
+#     ${XXHASH_LIBRARIES}
+#     ${ZMQ_LIBRARIES}
+# )
+# target_include_directories(test_zmq_transport_phase1_integration PRIVATE
+#     ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
+#     ${ZMQ_INCLUDE_DIRS}
+# )
 
 # target_link_libraries(test_patterns_only 
 #     delila_net

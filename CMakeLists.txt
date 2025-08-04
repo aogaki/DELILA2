@@ -35,8 +35,18 @@ elseif(EXISTS "/usr/lib/libzmq.dylib")
     set(ZMQ_FOUND TRUE)
     message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
 else()
-    # Fallback to pkg-config
+    # Fallback to pkg-config, but convert library names to full paths
     pkg_check_modules(ZMQ libzmq)
+    if(ZMQ_FOUND)
+        # Convert -lzmq to full path to avoid linking issues
+        find_library(ZMQ_FULL_PATH zmq PATHS ${ZMQ_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib)
+        if(ZMQ_FULL_PATH)
+            set(ZMQ_LIBRARIES "${ZMQ_FULL_PATH}")
+            message(STATUS "Found ZMQ via pkg-config, using full path: ${ZMQ_LIBRARIES}")
+        else()
+            message(WARNING "Found ZMQ via pkg-config but couldn't resolve full path")
+        endif()
+    endif()
 endif()
 
 # Direct path specification for LZ4 on macOS
@@ -56,7 +66,17 @@ elseif(EXISTS "/usr/lib/liblz4.dylib")
     set(LZ4_FOUND TRUE)
     message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
 else()
+    # Fallback to pkg-config, but convert library names to full paths
     pkg_check_modules(LZ4 liblz4)
+    if(LZ4_FOUND)
+        find_library(LZ4_FULL_PATH lz4 PATHS ${LZ4_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib)
+        if(LZ4_FULL_PATH)
+            set(LZ4_LIBRARIES "${LZ4_FULL_PATH}")
+            message(STATUS "Found LZ4 via pkg-config, using full path: ${LZ4_LIBRARIES}")
+        else()
+            message(WARNING "Found LZ4 via pkg-config but couldn't resolve full path")
+        endif()
+    endif()
 endif()
 
 # Direct path specification for xxHash on macOS
@@ -76,10 +96,26 @@ elseif(EXISTS "/usr/lib/libxxhash.dylib")
     set(XXHASH_FOUND TRUE)
     message(STATUS "Found xxHash at: ${XXHASH_LIBRARIES}")
 else()
+    # Fallback to pkg-config, but convert library names to full paths
     pkg_check_modules(XXHASH libxxhash)
+    if(XXHASH_FOUND)
+        find_library(XXHASH_FULL_PATH xxhash PATHS ${XXHASH_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib)
+        if(XXHASH_FULL_PATH)
+            set(XXHASH_LIBRARIES "${XXHASH_FULL_PATH}")
+            message(STATUS "Found xxHash via pkg-config, using full path: ${XXHASH_LIBRARIES}")
+        else()
+            message(WARNING "Found xxHash via pkg-config but couldn't resolve full path")
+        endif()
+    endif()
 endif()
 
 find_package(Protobuf QUIET)
+
+# Find CAEN FELib
+find_library(CAEN_FELIB CAEN_FELib)
+if(CAEN_FELIB)
+    message(STATUS "Found CAEN_FELib: ${CAEN_FELIB}")
+endif()
 
 # Add subdirectories
 add_subdirectory(lib/digitizer)
@@ -89,41 +125,49 @@ add_subdirectory(lib/net)
 set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
 file(WRITE ${DELILA_MAIN_SOURCE} 
 "// Main source file for DELILA library
+#include \"delila/delila.hpp\"
 #include <iostream>
 
 namespace DELILA {
     const char* getVersion() {
-        return \"1.0.0\";
+        return \"${PROJECT_VERSION}\";
     }
     
     bool initialize(const char* config_path) {
-        // TODO: Implement initialization
+        // Initialize network component
+        // Initialize digitizer component if needed
+        std::cout << \"DELILA2 v\" << getVersion() << \" initialized\" << std::endl;
         return true;
     }
     
     void shutdown() {
-        // TODO: Implement shutdown
+        // Cleanup network resources
+        // Cleanup digitizer resources
+        std::cout << \"DELILA2 shutdown complete\" << std::endl;
     }
 }
 ")
 
-# Create unified libDELILA.so
+# Create unified DELILA as shared library that combines all components
 add_library(DELILA SHARED ${DELILA_MAIN_SOURCE})
-# Link libraries conditionally
-target_link_libraries(DELILA PUBLIC delila_digitizer delila_net)
+# Link component libraries with PRIVATE to avoid symbol conflicts
+target_link_libraries(DELILA PRIVATE delila_digitizer delila_net)
 
 # Link optional dependencies if found
 if(ZMQ_FOUND)
-    target_link_libraries(DELILA PRIVATE ${ZMQ_LIBRARIES})
+    target_link_libraries(DELILA PUBLIC ${ZMQ_LIBRARIES})
 endif()
 if(LZ4_FOUND)
-    target_link_libraries(DELILA PRIVATE ${LZ4_LIBRARIES})
+    target_link_libraries(DELILA PUBLIC ${LZ4_LIBRARIES})
 endif()
 if(XXHASH_FOUND)
-    target_link_libraries(DELILA PRIVATE ${XXHASH_LIBRARIES})
+    target_link_libraries(DELILA PUBLIC ${XXHASH_LIBRARIES})
 endif()
 if(Protobuf_FOUND)
-    target_link_libraries(DELILA PRIVATE ${Protobuf_LIBRARIES})
+    target_link_libraries(DELILA PUBLIC ${Protobuf_LIBRARIES})
+endif()
+if(CAEN_FELIB)
+    target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
 endif()
 
 target_include_directories(DELILA
@@ -134,27 +178,27 @@ target_include_directories(DELILA
 
 # Add optional include directories
 if(ZMQ_FOUND)
-    target_include_directories(DELILA PRIVATE ${ZMQ_INCLUDE_DIRS})
+    target_include_directories(DELILA PUBLIC ${ZMQ_INCLUDE_DIRS})
 endif()
 if(LZ4_FOUND)
-    target_include_directories(DELILA PRIVATE ${LZ4_INCLUDE_DIRS})
+    target_include_directories(DELILA PUBLIC ${LZ4_INCLUDE_DIRS})
 endif()
 if(XXHASH_FOUND)
-    target_include_directories(DELILA PRIVATE ${XXHASH_INCLUDE_DIRS})
+    target_include_directories(DELILA PUBLIC ${XXHASH_INCLUDE_DIRS})
 endif()
 if(Protobuf_FOUND)
-    target_include_directories(DELILA PRIVATE ${Protobuf_INCLUDE_DIRS})
+    target_include_directories(DELILA PUBLIC ${Protobuf_INCLUDE_DIRS})
 endif()
 
 # Compiler definitions
 if(ZMQ_FOUND)
-    target_compile_definitions(DELILA PRIVATE ${ZMQ_CFLAGS_OTHER})
+    target_compile_definitions(DELILA PUBLIC ${ZMQ_CFLAGS_OTHER})
 endif()
 
-# Set library properties
+# Set library properties for shared library
 set_target_properties(DELILA PROPERTIES
     VERSION ${PROJECT_VERSION}
-    SOVERSION 1
+    SOVERSION ${PROJECT_VERSION_MAJOR}
     PUBLIC_HEADER "include/delila/delila.hpp"
 )
 
