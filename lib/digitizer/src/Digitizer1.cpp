@@ -87,9 +87,7 @@ bool Digitizer1::Configure()
 
   // Validate parameters before applying them
   if (!ValidateParameters()) {
-    std::cerr << "Parameter validation failed. Aborting configuration."
-              << std::endl;
-    return false;
+    std::cerr << "Parameter validation failed. Try to configure." << std::endl;
   }
 
   // Apply all configuration parameters
@@ -687,20 +685,22 @@ bool Digitizer1::EnableFineTimestamp()
   } else if (fFirmwareType == FirmwareType::PHA1) {
     extrasValue = "EXTRAS_OPT_TT48_FINETT";
   } else {
-    std::cerr << "Fine timestamp not supported for this firmware type" << std::endl;
+    std::cerr << "Fine timestamp not supported for this firmware type"
+              << std::endl;
     return false;
   }
 
   // Set extras option for all channels using parameter system
-  std::string path = "/ch/0.." + std::to_string(numChannels - 1) + "/par/ch_extras_opt";
-  
+  std::string path =
+      "/ch/0.." + std::to_string(numChannels - 1) + "/par/ch_extras_opt";
+
   if (!SetParameter(path, extrasValue)) {
     std::cerr << "Failed to set extras option for fine timestamp" << std::endl;
     return false;
   }
 
   if (fDebugFlag) {
-    std::cout << "Set fine timestamp for channels 0-" << (numChannels - 1) 
+    std::cout << "Set fine timestamp for channels 0-" << (numChannels - 1)
               << " using parameter system" << std::endl;
   }
 

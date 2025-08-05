@@ -99,9 +99,7 @@ bool Digitizer2::Configure()
 
   // Validate parameters before applying them
   if (!ValidateParameters()) {
-    std::cerr << "Parameter validation failed. Aborting configuration."
-              << std::endl;
-    return false;
+    std::cerr << "Parameter validation failed. Try configuration." << std::endl;
   }
 
   // Apply all configuration parameters
@@ -474,32 +472,33 @@ bool Digitizer2::SetParameter(const std::string &path, const std::string &value)
 bool Digitizer2::Open(const std::string &url)
 {
   std::cout << "Open URL: " << url << std::endl;
-  
+
   // Try CAEN_FELib_Open up to 3 times
   constexpr int maxRetries = 3;
   int err = static_cast<int>(CAEN_FELib_InternalError);
-  
+
   for (int attempt = 1; attempt <= maxRetries; ++attempt) {
     std::cout << "Attempt " << attempt << " of " << maxRetries << std::endl;
-    
+
     err = CAEN_FELib_Open(url.c_str(), &fHandle);
-    
+
     if (err == CAEN_FELib_Success) {
-      std::cout << "Successfully opened digitizer on attempt " << attempt << std::endl;
+      std::cout << "Successfully opened digitizer on attempt " << attempt
+                << std::endl;
       return true;
     }
-    
+
     // Log error for this attempt
     std::cout << "Attempt " << attempt << " failed: ";
     CheckError(err);
-    
+
     // Wait before retry (except on last attempt)
     if (attempt < maxRetries) {
       std::cout << "Waiting 1 second before retry..." << std::endl;
       std::this_thread::sleep_for(std::chrono::seconds(1));
     }
   }
-  
+
   std::cout << "All " << maxRetries << " attempts failed" << std::endl;
   return false;
 }

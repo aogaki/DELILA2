@@ -135,8 +135,8 @@ file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
 file(GLOB_RECURSE NET_SOURCES "lib/net/src/*.cpp")
 file(GLOB_RECURSE MONITOR_SOURCES "lib/monitor/src/*.cpp")
 
-# Remove duplicate EventData.cpp - use digitizer version
-list(FILTER NET_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
+# Remove duplicate EventData.cpp - use net version (contains serialization)
+list(FILTER DIGITIZER_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
 
 set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES} ${MONITOR_SOURCES})
 

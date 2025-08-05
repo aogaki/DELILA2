@@ -30,3 +30,28 @@ target_compile_features(delila_monitor PUBLIC cxx_std_17)
 
 # Add compile options
 target_compile_options(delila_monitor PRIVATE -pthread -O2)
+
+# Monitor library tests
+if(BUILD_TESTS AND GTest_FOUND)
+    file(GLOB MONITOR_TEST_SOURCES "tests/*.cpp")
+    
+    if(MONITOR_TEST_SOURCES)
+        add_executable(monitor_tests ${MONITOR_TEST_SOURCES})
+        
+        target_link_libraries(monitor_tests
+            delila_monitor
+            GTest::gtest_main
+            GTest::gmock
+            ${ROOT_LIBRARIES}
+            pthread
+        )
+        
+        target_include_directories(monitor_tests
+            PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
+        )
+        
+        add_test(NAME MonitorTests COMMAND monitor_tests)
+    endif()
+endif()

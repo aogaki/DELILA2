@@ -1,10 +1,15 @@
 #include "Monitor.hpp"
 
+#include <TROOT.h>
+#include <TSystem.h>
+
+#include <iostream>
+
 namespace DELILA::Monitor
 {
-Monitor::Monitor() {}
+Monitor::Monitor() { ROOT::EnableThreadSafety(); }
 
-Monitor::~Monitor() {}
+Monitor::~Monitor() { fHttpServer.reset(); }
 
 void Monitor::Start()
 {
@@ -22,13 +27,19 @@ void Monitor::Stop()
       thread.join();
     }
   }
+
+  // Stop HTTP server if it's running
+  if (fHttpServer) {
+    fHttpServer->SetTimer(0, kFALSE);
+    fHttpServer.reset();  // Destructor will handle proper shutdown
+  }
 }
 
 void Monitor::EnableWebServer(bool enable)
 {
   fWebServerEnabled = enable;
   if (fWebServerEnabled) {
-    fHttpServer = std::make_unique<THttpServer>("http://localhost:8080");
+    fHttpServer = std::make_unique<THttpServer>("http:8080;rw;noglobal");
   } else {
     fHttpServer.reset();
   }
@@ -42,16 +53,23 @@ void Monitor::SetHistsParams(
   fHistsParams = params;
 }
 
-void Monitor::CreateADCHists(
-    std::vector<std::vector<uint32_t>> const &adcChannels)
+void Monitor::CreateADCHists(std::vector<uint32_t> const &adcChannels)
 {
   fHistograms.clear();
   // Create histogram based on channel parameters and fHistsParams
   // use indexing to access fHistsParams and adcChannels
   for (auto iMod = 0; iMod < adcChannels.size(); ++iMod) {
     std::vector<std::unique_ptr<TH1D>> histogramsForModule;
-    for (auto iCh = 0; iCh < adcChannels[iMod].size(); ++iCh) {
-      const auto &params = fHistsParams[iMod][iCh];
+    for (auto iCh = 0; iCh < adcChannels[iMod]; ++iCh) {
+      HistsParams params =
+          HistsParams(Form("histADC%02d_%02d", iMod, iCh),
+                      Form("Mod%02d Ch%02d", iMod, iCh), 32000, 0.0, 32000.0);
+      if (iMod >= fHistsParams.size() || iCh >= fHistsParams[iMod].size()) {
+        std::cout << "Using default parameters for Mod " << iMod << " Channel "
+                  << iCh << " histogram" << std::endl;
+      } else {
+        params = fHistsParams[iMod][iCh];
+      }
       auto hist =
           std::make_unique<TH1D>(params.fName.c_str(), params.fTitle.c_str(),
                                  params.fNbinsX, params.fXmin, params.fXmax);
@@ -64,7 +82,7 @@ void Monitor::CreateADCHists(
   if (fWebServerEnabled && fHttpServer) {
     auto modCounter = 0;
     for (const auto &moduleHists : fHistograms) {
-      auto moduleName = "Module_" + std::to_string(modCounter++);
+      auto moduleName = "/Module_" + std::to_string(modCounter++);
       for (const auto &hist : moduleHists) {
         fHttpServer->Register(moduleName.c_str(), hist.get());
       }
@@ -76,8 +94,11 @@ void Monitor::CreateADCHists(
 void Monitor::LoadEventData(
     std::unique_ptr<std::vector<std::unique_ptr<EventData>>> eventData)
 {
-  std::lock_guard<std::mutex> lock(fMutex);
-  fEventDataQueue.push_back(std::move(eventData));
+  {
+    std::lock_guard<std::mutex> lock(fMutex);
+    fEventDataQueue.push_back(std::move(eventData));
+  }
+  if (fWebServerEnabled) gSystem->ProcessEvents();
 }
 
 void Monitor::ProcessEvents()
@@ -95,8 +116,8 @@ void Monitor::ProcessEvents()
     if (eventData) {
       // Process the event data
       for (const auto &event : *eventData) {
-        auto mod = event->module;
-        auto ch = event->channel;
+        int mod = event->module;
+        int ch = event->channel;
         if (mod < fHistograms.size() && ch < fHistograms[mod].size()) {
           fHistograms[mod][ch]->Fill(event->energy);
         }

@@ -15,6 +15,7 @@
 using DELILA::Digitizer::ConfigurationManager;
 using DELILA::Digitizer::Digitizer;
 using DELILA::Monitor::Monitor;
+using DELILA::Monitor::Recorder;
 
 enum class DAQState { Acquiring, Stopping };
 
@@ -61,7 +62,18 @@ int main()
   digitizer->Initialize(configManager);
   digitizer->Configure();
 
-  // auto monitor = std::make_unique<Monitor>();  // Temporarily disabled
+  auto monitor = std::make_unique<Monitor>();
+  monitor->EnableWebServer(true);
+  monitor->SetNThreads(4);
+  auto histsParams = std::vector<std::vector<DELILA::Monitor::HistsParams>>{
+      {{"ADC Histogram", "ADC Channel Histogram", 32000, 0.0, 32000.0}}};
+  monitor->SetHistsParams(histsParams);
+  auto adcChannels = std::vector<uint32_t>{32};
+  monitor->CreateADCHists(adcChannels);
+  monitor->Start();
+
+  auto recorder = std::make_unique<Recorder>();
+  recorder->StartRecording(4, 1024 * 1024 * 1024, 100000, 1, "test", "./");
 
   digitizer->StartAcquisition();
   bool isAcquiring = true;
@@ -79,11 +91,20 @@ int main()
     if (nEvents > 0) {
       counter += nEvents;
       std::cout << "Event received: " << event->size() << std::endl;
-      std::cout << int(event->at(0)->channel) << std::endl;
+      // copy event data
+      auto copyData = std::make_unique<
+          std::vector<std::unique_ptr<DELILA::Digitizer::EventData>>>();
+      for (const auto &e : *event) {
+        copyData->push_back(std::make_unique<DELILA::Digitizer::EventData>(*e));
+      }
+      recorder->LoadEventData(std::move(copyData));
+      monitor->LoadEventData(std::move(event));
     }
   }
 
+  monitor->Stop();
   digitizer->StopAcquisition();
+  recorder->StopRecording();
 
   auto endTime = std::chrono::steady_clock::now();
   std::chrono::duration<double> elapsedTime = endTime - startTime;

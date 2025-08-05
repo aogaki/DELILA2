@@ -47,7 +47,7 @@ class Monitor
   void SetNThreads(uint32_t nThreads);
 
   void SetHistsParams(std::vector<std::vector<HistsParams>> const &params);
-  void CreateADCHists(std::vector<std::vector<uint32_t>> const &adcChannels);
+  void CreateADCHists(std::vector<uint32_t> const &adcChannels);
 
   void LoadEventData(
       std::unique_ptr<std::vector<std::unique_ptr<EventData>>> eventData);
