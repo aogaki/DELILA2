@@ -111,6 +111,14 @@ endif()
 
 find_package(Protobuf QUIET)
 
+# Find ROOT (required for Monitor library)
+find_package(ROOT QUIET)
+if(ROOT_FOUND)
+    message(STATUS "Found ROOT at: ${ROOT_INCLUDE_DIRS}")
+else()
+    message(WARNING "ROOT not found - Monitor library will not have full functionality")
+endif()
+
 # Find CAEN FELib
 find_library(CAEN_FELIB CAEN_FELib)
 if(CAEN_FELIB)
@@ -125,11 +133,12 @@ endif()
 # Collect all source files from lib subdirectories, excluding duplicates
 file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
 file(GLOB_RECURSE NET_SOURCES "lib/net/src/*.cpp")
+file(GLOB_RECURSE MONITOR_SOURCES "lib/monitor/src/*.cpp")
 
 # Remove duplicate EventData.cpp - use digitizer version
 list(FILTER NET_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
 
-set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES})
+set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES} ${MONITOR_SOURCES})
 
 # Create a simple main source file for version info
 set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
@@ -165,6 +174,7 @@ target_include_directories(DELILA
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/digitizer/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/net/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/monitor/include>
         $<INSTALL_INTERFACE:include>
 )
 
@@ -187,6 +197,31 @@ if(Protobuf_FOUND)
 endif()
 if(CAEN_FELIB)
     target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
+endif()
+if(ROOT_FOUND)
+    # Get ROOT library directory
+    execute_process(COMMAND root-config --libdir
+        OUTPUT_VARIABLE ROOT_LIB_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    
+    # Find RHTTP library specifically
+    find_library(ROOT_RHTTP_LIBRARY 
+        NAMES RHTTP libRHTTP
+        PATHS ${ROOT_LIB_DIR}
+        NO_DEFAULT_PATH
+    )
+    
+    if(ROOT_RHTTP_LIBRARY)
+        target_link_libraries(DELILA PUBLIC ${ROOT_LIBRARIES} ${ROOT_RHTTP_LIBRARY})
+        message(STATUS "Found ROOT RHTTP library: ${ROOT_RHTTP_LIBRARY}")
+    else()
+        target_link_libraries(DELILA PUBLIC ${ROOT_LIBRARIES})
+        message(WARNING "ROOT RHTTP library not found - THttpServer will not work")
+    endif()
+    
+    target_include_directories(DELILA PUBLIC ${ROOT_INCLUDE_DIRS})
+    target_compile_definitions(DELILA PUBLIC ROOT_FOUND)
 endif()
 
 # Compiler definitions
@@ -240,6 +275,12 @@ install(DIRECTORY lib/digitizer/include/
 # Install network library headers  
 install(DIRECTORY lib/net/include/
     DESTINATION include/delila/net
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+# Install monitor library headers
+install(DIRECTORY lib/monitor/include/
+    DESTINATION include/delila/monitor
     FILES_MATCHING PATTERN "*.hpp"
 )
 
