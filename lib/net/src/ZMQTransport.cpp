@@ -1,4 +1,5 @@
 #include "ZMQTransport.hpp"
+#include "../../../include/delila/core/MinimalEventData.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -377,6 +378,217 @@ ZMQTransport::Receive()
   } catch (const zmq::error_t &e) {
     // Simple error handling following KISS
     return std::make_pair(nullptr, 0);
+  }
+}
+
+// GREEN: Minimal implementation for SendMinimal method
+bool ZMQTransport::SendMinimal(
+    const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> &events)
+{
+  // Must be connected first
+  if (!fConnected || !fDataSocket) {
+    return false;
+  }
+  
+  // Handle null or empty input
+  if (!events || events->empty()) {
+    return false;
+  }
+
+  // Use configured persistent serializer to encode MinimalEventData with sequence number
+  auto encoded_data = fSerializer->Encode(events, ++fSequenceNumber);
+
+  if (!encoded_data || encoded_data->empty()) {
+    return false;
+  }
+
+  try {
+    zmq::message_t message;
+    
+    if (fZeroCopyEnabled) {
+      // Zero-copy: Transfer ownership of the data to ZMQ
+      auto* raw_data = encoded_data->data();
+      auto data_size = encoded_data->size();
+      
+      // Create a custom deallocator that deletes the vector
+      auto deallocator = [](void* data, void* hint) {
+        auto* vec = static_cast<std::vector<uint8_t>*>(hint);
+        delete vec;
+      };
+      
+      // Release ownership from unique_ptr and transfer to ZMQ
+      auto* vector_ptr = encoded_data.release();
+      message = zmq::message_t(raw_data, data_size, deallocator, vector_ptr);
+    } else {
+      // Traditional copy-based approach
+      message = zmq::message_t(encoded_data->size());
+      std::memcpy(message.data(), encoded_data->data(), encoded_data->size());
+    }
+
+    auto result = fDataSocket->send(message, zmq::send_flags::dontwait);
+    
+    // If memory pool is enabled and send was successful, add a container to the pool
+    if (result.has_value() && fMemoryPoolEnabled) {
+      auto temp_container = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
+      ReturnMinimalContainerToPool(std::move(temp_container));
+    }
+    
+    return result.has_value();
+
+  } catch (const zmq::error_t &e) {
+    return false;
+  }
+}
+
+// GREEN: Minimal implementation for ReceiveMinimal method
+std::pair<std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>, uint64_t>
+ZMQTransport::ReceiveMinimal()
+{
+  // Must be connected first
+  // For PAIR pattern, use fDataSocket since it can both send and receive
+  zmq::socket_t* receive_socket = fReceiveSocket.get();
+  if (!receive_socket && fConfig.data_pattern == "PAIR") {
+    receive_socket = fDataSocket.get();
+  }
+  
+  if (!fConnected || !receive_socket) {
+    return std::make_pair(nullptr, 0);
+  }
+
+  try {
+    // Receive message with timeout
+    zmq::message_t message;
+    auto result = receive_socket->recv(message, zmq::recv_flags::none);
+
+    if (!result.has_value() || message.size() == 0) {
+      // No message received or timeout
+      return std::make_pair(nullptr, 0);
+    }
+
+    // Convert ZMQ message to vector
+    auto received_data = std::make_unique<std::vector<uint8_t>>(
+        static_cast<const uint8_t *>(message.data()),
+        static_cast<const uint8_t *>(message.data()) + message.size());
+
+    // Use configured persistent serializer to decode the MinimalEventData
+    return fSerializer->DecodeMinimalEventData(received_data);
+
+  } catch (const zmq::error_t &e) {
+    // Simple error handling following KISS
+    return std::make_pair(nullptr, 0);
+  }
+}
+
+// GREEN: Automatic format detection implementation
+ZMQTransport::DataType ZMQTransport::PeekDataType()
+{
+  // Must be connected first
+  zmq::socket_t* receive_socket = fReceiveSocket.get();
+  if (!receive_socket && fConfig.data_pattern == "PAIR") {
+    receive_socket = fDataSocket.get();
+  }
+  
+  if (!fConnected || !receive_socket) {
+    return DataType::UNKNOWN;
+  }
+
+  try {
+    // Peek at message without consuming it using ZMQ_DONTWAIT
+    zmq::message_t message;
+    auto result = receive_socket->recv(message, zmq::recv_flags::dontwait);
+
+    if (!result.has_value() || message.size() == 0) {
+      // No message available
+      return DataType::UNKNOWN;
+    }
+    
+    // Check if message is large enough to contain header
+    if (message.size() < sizeof(BinaryDataHeader)) {
+      return DataType::INVALID;
+    }
+
+    // Extract header
+    BinaryDataHeader header;
+    std::memcpy(&header, message.data(), sizeof(BinaryDataHeader));
+    
+    // Verify magic number
+    if (header.magic_number != BINARY_DATA_MAGIC_NUMBER) {
+      return DataType::INVALID;
+    }
+    
+    // Return format type based on version
+    switch (header.format_version) {
+        case FORMAT_VERSION_EVENTDATA:
+            return DataType::EVENTDATA;
+        case FORMAT_VERSION_MINIMAL_EVENTDATA:
+            return DataType::MINIMAL_EVENTDATA;
+        default:
+            return DataType::INVALID;
+    }
+
+  } catch (const zmq::error_t &e) {
+    return DataType::UNKNOWN;
+  }
+}
+
+// GREEN: Smart receive method with automatic format detection
+std::pair<std::variant<
+    std::unique_ptr<std::vector<std::unique_ptr<EventData>>>,
+    std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
+>, uint64_t> ZMQTransport::ReceiveAny()
+{
+  using EventDataVector = std::unique_ptr<std::vector<std::unique_ptr<EventData>>>;
+  using MinimalEventDataVector = std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>;
+  using VariantType = std::variant<EventDataVector, MinimalEventDataVector>;
+  
+  // Must be connected first
+  zmq::socket_t* receive_socket = fReceiveSocket.get();
+  if (!receive_socket && fConfig.data_pattern == "PAIR") {
+    receive_socket = fDataSocket.get();
+  }
+  
+  if (!fConnected || !receive_socket) {
+    return std::make_pair(VariantType{}, 0);
+  }
+
+  try {
+    // Receive message
+    zmq::message_t message;
+    auto result = receive_socket->recv(message, zmq::recv_flags::none);
+
+    if (!result.has_value() || message.size() == 0) {
+      return std::make_pair(VariantType{}, 0);
+    }
+
+    // Convert ZMQ message to vector
+    auto received_data = std::make_unique<std::vector<uint8_t>>(
+        static_cast<const uint8_t *>(message.data()),
+        static_cast<const uint8_t *>(message.data()) + message.size());
+
+    // Peek at format version in header
+    if (received_data->size() >= sizeof(BinaryDataHeader)) {
+      BinaryDataHeader header;
+      std::memcpy(&header, received_data->data(), sizeof(BinaryDataHeader));
+      
+      if (header.magic_number == BINARY_DATA_MAGIC_NUMBER) {
+        if (header.format_version == FORMAT_VERSION_MINIMAL_EVENTDATA) {
+          // Decode as MinimalEventData
+          auto [events, seq] = fSerializer->DecodeMinimalEventData(received_data);
+          return std::make_pair(VariantType{std::move(events)}, seq);
+        } else if (header.format_version == FORMAT_VERSION_EVENTDATA) {
+          // Decode as EventData
+          auto [events, seq] = fSerializer->Decode(received_data);
+          return std::make_pair(VariantType{std::move(events)}, seq);
+        }
+      }
+    }
+    
+    // Fallback to EventData if format detection fails
+    auto [events, seq] = fSerializer->Decode(received_data);
+    return std::make_pair(VariantType{std::move(events)}, seq);
+
+  } catch (const zmq::error_t &e) {
+    return std::make_pair(VariantType{}, 0);
   }
 }
 
@@ -824,6 +1036,14 @@ void ZMQTransport::ReturnContainerToPool(std::unique_ptr<std::vector<std::unique
     fEventContainerPool.push(std::move(container));
   }
   // If pool is full, let the container be destroyed naturally
+}
+
+// GREEN: MinimalEventData memory pool helper method (minimal implementation)
+void ZMQTransport::ReturnMinimalContainerToPool(std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> container)
+{
+  // For now, just let it be destroyed (minimal implementation for GREEN phase)
+  // TODO: Add proper memory pooling for MinimalEventData in REFACTOR phase
+  return;
 }
 
 // ============================================================================

@@ -83,6 +83,57 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Encode(
   return result;
 }
 
+// MinimalEventData encoding implementation
+std::unique_ptr<std::vector<uint8_t>> Serializer::Encode(
+    const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> &events,
+    uint64_t sequenceNumber)
+{
+  if (!events) {
+    return nullptr;
+  }
+  
+  // Serialize MinimalEventData to binary format
+  auto serializedData = SerializeMinimalEventData(events);
+  if (!serializedData) {
+    return nullptr;
+  }
+  
+  // Create header for MinimalEventData format
+  BinaryDataHeader header{};
+  header.magic_number = BINARY_DATA_MAGIC_NUMBER;
+  header.sequence_number = sequenceNumber;
+  header.format_version = FORMAT_VERSION_MINIMAL_EVENTDATA; // Set to version 2
+  header.header_size = BINARY_DATA_HEADER_SIZE;
+  header.event_count = static_cast<uint32_t>(events->size());
+  header.uncompressed_size = static_cast<uint32_t>(serializedData->size());
+  header.compressed_size = header.uncompressed_size;
+  
+  // Use current timestamp
+  auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+      std::chrono::high_resolution_clock::now().time_since_epoch());
+  header.timestamp = static_cast<uint64_t>(now.count());
+  
+  // Calculate checksum if enabled
+  if (fChecksumEnabled) {
+    header.checksum = CalculateChecksum(serializedData);
+  }
+  
+  // Assemble final result
+  auto result = std::make_unique<std::vector<uint8_t>>();
+  result->reserve(sizeof(header) + serializedData->size());
+  
+  // Write header
+  const uint8_t* headerBytes = reinterpret_cast<const uint8_t*>(&header);
+  result->insert(result->end(), headerBytes, headerBytes + sizeof(header));
+  
+  // Write data
+  if (!serializedData->empty()) {
+    result->insert(result->end(), serializedData->begin(), serializedData->end());
+  }
+  
+  return result;
+}
+
 std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Serializer::Decode(
     const std::unique_ptr<std::vector<uint8_t>> &input)
 {
@@ -144,6 +195,54 @@ std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Se
   }
   
   return std::make_pair(std::move(events), header.sequence_number);
+}
+
+// MinimalEventData decoding implementation
+std::pair<std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>, uint64_t> 
+Serializer::DecodeMinimalEventData(const std::unique_ptr<std::vector<uint8_t>> &input)
+{
+  if (!input || input->size() < sizeof(BinaryDataHeader)) {
+    return std::make_pair(nullptr, 0);
+  }
+
+  // Parse header
+  const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(input->data());
+  
+  // Validate magic number
+  if (header->magic_number != BINARY_DATA_MAGIC_NUMBER) {
+    return std::make_pair(nullptr, 0);
+  }
+  
+  // Validate format version
+  if (header->format_version != FORMAT_VERSION_MINIMAL_EVENTDATA) {
+    return std::make_pair(nullptr, 0);
+  }
+  
+  // Extract payload data
+  if (input->size() < header->header_size + header->compressed_size) {
+    return std::make_pair(nullptr, 0);
+  }
+  
+  auto payloadData = std::make_unique<std::vector<uint8_t>>(
+    input->begin() + header->header_size,
+    input->begin() + header->header_size + header->compressed_size);
+  
+  // Verify checksum if enabled
+  if (fChecksumEnabled && header->checksum != 0) {
+    if (!VerifyChecksum(payloadData, header->checksum)) {
+      return std::make_pair(nullptr, 0);
+    }
+  }
+  
+  // Deserialize MinimalEventData
+  auto events = DeserializeMinimalEventData(payloadData);
+  
+  // Validate event count
+  if (!events || events->size() != header->event_count) {
+    return std::make_pair(nullptr, 0);
+  }
+  
+  return std::make_pair(std::move(events), header->sequence_number);
 }
 
 std::unique_ptr<std::vector<uint8_t>> Serializer::Compress(
@@ -345,6 +444,33 @@ std::unique_ptr<std::vector<uint8_t>> Serializer::Serialize(
   
   return result;
 }
+
+// MinimalEventData serialization - simple fixed-size records
+std::unique_ptr<std::vector<uint8_t>> Serializer::SerializeMinimalEventData(
+    const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> &events)
+{
+  if (!events || events->empty()) {
+    return GetBufferFromPool();  // Return empty buffer from pool
+  }
+
+  auto result = GetBufferFromPool();  // Use buffer pool
+  
+  // Reserve exact space needed: each MinimalEventData is exactly 22 bytes
+  constexpr size_t MINIMAL_EVENT_SIZE = 22;
+  result->reserve(events->size() * MINIMAL_EVENT_SIZE);
+  
+  // Serialize each event as fixed 22-byte record
+  for (const auto& event : *events) {
+    if (!event) continue;
+    
+    // Simply copy the packed struct as binary data
+    const uint8_t* eventBytes = reinterpret_cast<const uint8_t*>(event.get());
+    result->insert(result->end(), eventBytes, eventBytes + MINIMAL_EVENT_SIZE);
+  }
+  
+  return result;
+}
+
 std::unique_ptr<std::vector<std::unique_ptr<EventData>>>
 Serializer::Deserialize(const std::unique_ptr<std::vector<uint8_t>> &input)
 {
@@ -433,6 +559,41 @@ Serializer::Deserialize(const std::unique_ptr<std::vector<uint8_t>> &input)
       if (!readBytes(event->digitalProbe4.data(), size * sizeof(uint8_t))) break;
     }
     
+    events->push_back(std::move(event));
+  }
+  
+  return events;
+}
+
+// MinimalEventData deserialization - simple fixed-size records
+std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> 
+Serializer::DeserializeMinimalEventData(const std::unique_ptr<std::vector<uint8_t>> &input)
+{
+  if (!input || input->empty()) {
+    return std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
+  }
+
+  constexpr size_t MINIMAL_EVENT_SIZE = 22;
+  size_t eventCount = input->size() / MINIMAL_EVENT_SIZE;
+  
+  // Validate that data size is a multiple of MinimalEventData size
+  if (input->size() % MINIMAL_EVENT_SIZE != 0) {
+    return nullptr; // Invalid data size
+  }
+
+  auto events = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
+  events->reserve(eventCount);
+  
+  // Deserialize each 22-byte record
+  const uint8_t* data = input->data();
+  for (size_t i = 0; i < eventCount; ++i) {
+    const uint8_t* eventData = data + (i * MINIMAL_EVENT_SIZE);
+    
+    // Directly cast binary data back to MinimalEventData struct
+    const MinimalEventData* sourceEvent = reinterpret_cast<const MinimalEventData*>(eventData);
+    
+    // Create new event and copy data
+    auto event = std::make_unique<MinimalEventData>(*sourceEvent);
     events->push_back(std::move(event));
   }
   

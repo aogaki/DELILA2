@@ -8,10 +8,15 @@
 #include <sstream>
 #include <queue>
 #include <mutex>
+#include <variant>
 #include <zmq.hpp>
 #include <nlohmann/json.hpp>
 #include "Serializer.hpp"
 
+// Forward declarations
+namespace DELILA::Digitizer {
+    class MinimalEventData;
+}
 namespace DELILA::Net {
 
 // Simple configuration following KISS principle
@@ -89,6 +94,19 @@ public:
     // Data functions (using existing Serializer)
     bool Send(const std::unique_ptr<std::vector<std::unique_ptr<EventData>>>& events);
     std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Receive();
+
+    // MinimalEventData transport methods
+    bool SendMinimal(const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>& events);
+    std::pair<std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>, uint64_t> ReceiveMinimal();
+
+    
+    // Automatic format detection methods
+    enum class DataType { UNKNOWN, EVENTDATA, MINIMAL_EVENTDATA, INVALID };
+    DataType PeekDataType();
+    std::pair<std::variant<
+        std::unique_ptr<std::vector<std::unique_ptr<EventData>>>,
+        std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
+    >, uint64_t> ReceiveAny();
     
     // Status functions  
     bool SendStatus(const ComponentStatus& status);
@@ -177,6 +195,8 @@ private:
     // Memory pool helper methods
     std::unique_ptr<std::vector<std::unique_ptr<EventData>>> GetContainerFromPool();
     void ReturnContainerToPool(std::unique_ptr<std::vector<std::unique_ptr<EventData>>> container);
+
+    void ReturnMinimalContainerToPool(std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> container);
 };
 
 } // namespace DELILA::Net

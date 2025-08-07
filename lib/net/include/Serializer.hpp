@@ -9,8 +9,10 @@
 #include <vector>
 
 #include "../../../include/delila/core/EventData.hpp"
+#include "../../../include/delila/core/MinimalEventData.hpp"
 
 using DELILA::Digitizer::EventData;
+using DELILA::Digitizer::MinimalEventData;
 
 namespace DELILA::Net
 {
@@ -31,6 +33,10 @@ struct BinaryDataHeader {
 constexpr uint32_t BINARY_DATA_HEADER_SIZE = 64;
 // "DELILA2\0"
 constexpr uint64_t BINARY_DATA_MAGIC_NUMBER = 0x44454C494C413200;
+
+// Format version constants
+constexpr uint32_t FORMAT_VERSION_EVENTDATA = 1;         // Full EventData with waveforms
+constexpr uint32_t FORMAT_VERSION_MINIMAL_EVENTDATA = 2; // MinimalEventData (22 bytes)
 
 class Serializer
 {
@@ -53,7 +59,16 @@ class Serializer
       const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events,
       uint64_t sequenceNumber = 0);
 
+  // MinimalEventData encoding support
+  std::unique_ptr<std::vector<uint8_t>> Encode(
+      const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> &events,
+      uint64_t sequenceNumber = 0);
+
   std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Decode(
+      const std::unique_ptr<std::vector<uint8_t>> &input);
+
+  // MinimalEventData decoding support
+  std::pair<std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>, uint64_t> DecodeMinimalEventData(
       const std::unique_ptr<std::vector<uint8_t>> &input);
 
  private:
@@ -84,8 +99,16 @@ class Serializer
 
   std::unique_ptr<std::vector<uint8_t>> Serialize(
       const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events);
+      
+  // MinimalEventData serialization support
+  std::unique_ptr<std::vector<uint8_t>> SerializeMinimalEventData(
+      const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> &events);
 
   std::unique_ptr<std::vector<std::unique_ptr<EventData>>> Deserialize(
+      const std::unique_ptr<std::vector<uint8_t>> &input);
+
+  // MinimalEventData deserialization support
+  std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>> DeserializeMinimalEventData(
       const std::unique_ptr<std::vector<uint8_t>> &input);
 
   // Buffer pool helper methods (Phase 3)

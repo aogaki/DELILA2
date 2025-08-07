@@ -91,13 +91,6 @@ int main()
     if (nEvents > 0) {
       counter += nEvents;
       std::cout << "Event received: " << event->size() << std::endl;
-      // copy event data
-      auto copyData = std::make_unique<
-          std::vector<std::unique_ptr<DELILA::Digitizer::EventData>>>();
-      for (const auto &e : *event) {
-        copyData->push_back(std::make_unique<DELILA::Digitizer::EventData>(*e));
-      }
-      recorder->LoadEventData(std::move(copyData));
       monitor->LoadEventData(std::move(event));
     }
   }

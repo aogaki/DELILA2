@@ -65,3 +65,22 @@ Makefile
 TODO.md
 
 aogaki
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+*.patch
+*.diff
+*.rej
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.tar.bz2
+*.tar.xz
+*.tgz
+*.xz
+*.bz2
