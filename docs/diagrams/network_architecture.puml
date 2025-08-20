@@ -1,0 +1,186 @@
+@startuml network_architecture
+!theme plain
+title Network Library Architecture
+
+package "Transport Layer" {
+  class ZMQTransport {
+    -fConnected: bool
+    -fConfigured: bool
+    -fConfig: TransportConfig
+    -fContext: zmq::context_t
+    -fDataSocket: zmq::socket_t
+    -fStatusSocket: zmq::socket_t
+    +ZMQTransport()
+    +~ZMQTransport()
+    +Configure(config: TransportConfig) : bool
+    +ConfigureFromJSON(jsonStr: string) : bool
+    +ConfigureFromFile(filename: string) : bool
+    +Connect() : bool
+    +Disconnect() : void
+    +IsConnected() : bool
+    +SendBytes(data: unique_ptr<vector<uint8_t>>) : bool
+    +ReceiveBytes() : unique_ptr<vector<uint8_t>>
+    +SendStatus(status: ComponentStatus) : bool
+    +ReceiveStatus() : unique_ptr<ComponentStatus>
+    -SerializeStatus(status: ComponentStatus) : string
+    -DeserializeStatus(data: string) : unique_ptr<ComponentStatus>
+  }
+  
+  class TransportConfig {
+    +data_address: string
+    +status_address: string
+    +command_address: string
+    +bind_data: bool
+    +bind_status: bool
+    +bind_command: bool
+    +data_pattern: string
+    +is_publisher: bool
+  }
+  
+  class ComponentStatus {
+    +component_id: string
+    +state: string
+    +timestamp: uint64_t
+    +metrics: json
+    +error_message: string
+    +heartbeat_counter: uint64_t
+  }
+}
+
+package "Serialization Layer" {
+  class DataProcessor {
+    -compression_enabled_: bool
+    -checksum_enabled_: bool
+    -{static} crc32_table_: array<uint32_t, 256>
+    -{static} table_initialized_: atomic<bool>
+    -{static} CRC32_POLYNOMIAL: uint32_t
+    +DataProcessor()
+    +~DataProcessor()
+    +EnableCompression(enable: bool) : void
+    +EnableChecksum(enable: bool) : void
+    +IsCompressionEnabled() : bool
+    +IsChecksumEnabled() : bool
+    +Process(events: vector<EventData>, sequence: uint64_t) : unique_ptr<vector<uint8_t>>
+    +Process(events: vector<MinimalEventData>, sequence: uint64_t) : unique_ptr<vector<uint8_t>>
+    +Decode(data: vector<uint8_t>) : pair<variant<vector<EventData>, vector<MinimalEventData>>, uint64_t>
+    +DecodeMinimal(data: vector<uint8_t>) : pair<vector<MinimalEventData>, uint64_t>
+    -Serialize(events: vector<EventData>, sequence: uint64_t) : vector<uint8_t>
+    -SerializeMinimal(events: vector<MinimalEventData>, sequence: uint64_t) : vector<uint8_t>
+    -Deserialize(data: vector<uint8_t>) : pair<vector<EventData>, uint64_t>
+    -DeserializeMinimal(data: vector<uint8_t>) : pair<vector<MinimalEventData>, uint64_t>
+    -CompressLZ4(data: vector<uint8_t>) : vector<uint8_t>
+    -DecompressLZ4(data: vector<uint8_t>) : vector<uint8_t>
+    -CalculateCRC32(data: vector<uint8_t>) : uint32_t
+    -VerifyCRC32(data: vector<uint8_t>, expected: uint32_t) : bool
+    -{static} InitializeCRC32Table() : void
+  }
+  
+  class BinaryDataHeader {
+    +magic_number: uint32_t
+    +sequence_number: uint64_t
+    +format_version: uint16_t
+    +header_size: uint16_t
+    +event_count: uint32_t
+    +uncompressed_size: uint32_t
+    +compressed_size: uint32_t
+    +checksum: uint32_t
+    +timestamp: uint64_t
+    +compression_type: uint8_t
+    +checksum_type: uint8_t
+    +reserved: array<uint8_t, 6>
+  }
+  
+  note right of BinaryDataHeader
+    Total size: 64 bytes
+    Used for both EventData
+    and MinimalEventData formats
+  end note
+}
+
+package "Data Types" {
+  class EventData {
+    +timeStampNs: uint64_t
+    +waveformSize: uint32_t
+    +analogProbe1: vector<uint16_t>
+    +analogProbe2: vector<uint16_t>
+    +digitalProbe1: vector<uint8_t>
+    +digitalProbe2: vector<uint8_t>
+    +digitalProbe3: vector<uint8_t>
+    +digitalProbe4: vector<uint8_t>
+    +energy: uint16_t
+    +energyShort: uint16_t
+    +module: uint8_t
+    +channel: uint8_t
+    +flags: uint16_t
+    +ResizeWaveform(size: uint32_t) : void
+    +ClearWaveform() : void
+    +Print() : void
+    +HasPileup() : bool
+    +HasTriggerLost() : bool
+    +HasOverRange() : bool
+  }
+  
+  class MinimalEventData {
+    +module: uint8_t
+    +channel: uint8_t
+    +energy: uint16_t
+    +energyShort: uint16_t
+    +timeStampNs: uint64_t
+    +flags: uint16_t
+    +MinimalEventData(module, channel, timeStampNs, energy, energyShort, flags)
+    +HasPileup() : bool
+    +HasTriggerLost() : bool
+    +HasOverRange() : bool
+  }
+  
+  note right of MinimalEventData
+    POD structure: 22 bytes
+    96% memory reduction vs EventData
+    128M+ events/sec encoding speed
+  end note
+}
+
+package "Constants" {
+  class NetworkConstants <<static>> {
+    +BINARY_DATA_HEADER_SIZE: size_t = 64
+    +BINARY_DATA_MAGIC_NUMBER: uint32_t = 0xDELILA01
+    +FORMAT_VERSION_EVENTDATA: uint16_t = 1
+    +FORMAT_VERSION_MINIMAL_EVENTDATA: uint16_t = 2
+    +COMPRESSION_NONE: uint8_t = 0
+    +COMPRESSION_LZ4: uint8_t = 1
+    +CHECKSUM_NONE: uint8_t = 0
+    +CHECKSUM_CRC32: uint8_t = 1
+  }
+}
+
+' Relationships
+ZMQTransport --> TransportConfig : configured by
+ZMQTransport --> ComponentStatus : sends/receives
+DataProcessor --> BinaryDataHeader : creates
+DataProcessor --> EventData : processes
+DataProcessor --> MinimalEventData : processes
+DataProcessor --> NetworkConstants : uses
+
+' Usage flow
+ZMQTransport ..> DataProcessor : "NEW API:\nSeparated concerns"
+note on link : User controls serialization
+
+' ZeroMQ integration
+package "ZeroMQ Integration" {
+  class "zmq::context_t" as ZMQContext
+  class "zmq::socket_t" as ZMQSocket
+  enum "zmq::socket_type" as ZMQType {
+    pub
+    sub
+    push
+    pull
+    req
+    rep
+  }
+}
+
+ZMQTransport --> ZMQContext : uses
+ZMQTransport --> ZMQSocket : uses
+ZMQSocket --> ZMQType : configured as
+
+@enduml

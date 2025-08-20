@@ -287,6 +287,14 @@ if(BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# Option to build documentation
+option(BUILD_DOCUMENTATION "Build API documentation with Doxygen" OFF)
+
+# Add documentation subdirectory
+if(BUILD_DOCUMENTATION OR CMAKE_BUILD_TYPE MATCHES "Release")
+    add_subdirectory(docs)
+endif()
+
 # Add examples (commented out for standalone library build)
 # add_subdirectory(examples)
 

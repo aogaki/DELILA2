@@ -1,0 +1,180 @@
+@startuml digitizer_class_hierarchy
+!theme plain
+title Digitizer Library Class Hierarchy
+
+package "Digitizer Interface Layer" {
+  interface IDigitizer {
+    +Initialize(config: ConfigurationManager) : bool
+    +Configure() : bool
+    +StartAcquisition() : bool
+    +StopAcquisition() : bool
+    +SendSWTrigger() : bool
+    +CheckStatus() : bool
+    +GetEventData() : unique_ptr<vector<EventData>>
+    +PrintDeviceInfo() : void
+    +GetDeviceTreeJSON() : const json&
+    +GetType() : FirmwareType
+    +GetHandle() : uint64_t
+    +GetModuleNumber() : uint8_t
+  }
+  
+  enum FirmwareType {
+    PSD1
+    PSD2  
+    PHA1
+    PHA2
+    QDC1
+    SCOPE1
+    SCOPE2
+    UNKNOWN
+  }
+}
+
+package "Decoder Interface Layer" {
+  interface IDecoder {
+    +SetTimeStep(timeStep: uint32_t) : void
+    +SetDumpFlag(dumpFlag: bool) : void  
+    +SetModuleNumber(moduleNumber: uint8_t) : void
+    +AddData(rawData: unique_ptr<RawData_t>) : DataType
+    +GetEventData() : unique_ptr<vector<EventData>>
+  }
+  
+  enum DataType {
+    EVENT_DATA
+    BUFFER_FULL
+    ERROR_DATA
+    NO_DATA
+  }
+}
+
+package "Abstract Base Classes" {
+  abstract class Digitizer {
+    #fHandle: uint64_t
+    #fModuleNumber: uint8_t
+    #fConfigManager: ConfigurationManager
+    #fDecoder: unique_ptr<IDecoder>
+    +Digitizer(handle, moduleNumber)
+    +GetHandle() : uint64_t
+    +GetModuleNumber() : uint8_t
+    {abstract} +Initialize(config: ConfigurationManager) : bool
+    {abstract} +Configure() : bool
+    {abstract} +StartAcquisition() : bool
+    {abstract} +StopAcquisition() : bool
+  }
+}
+
+package "Concrete Implementations" {
+  class Digitizer1 {
+    -fCAENHandle: int
+    -fBoardInfo: CAEN_DGTZ_BoardInfo_t
+    +Digitizer1(handle, moduleNumber)
+    +Initialize(config: ConfigurationManager) : bool
+    +Configure() : bool
+    +StartAcquisition() : bool
+    +StopAcquisition() : bool
+    +SendSWTrigger() : bool
+    +CheckStatus() : bool
+    +GetEventData() : unique_ptr<vector<EventData>>
+    +PrintDeviceInfo() : void
+    +GetDeviceTreeJSON() : const json&
+    +GetType() : FirmwareType
+  }
+  
+  class Digitizer2 {
+    -fEndpoint: string
+    -fBoardInfo: json
+    +Digitizer2(handle, moduleNumber)
+    +Initialize(config: ConfigurationManager) : bool  
+    +Configure() : bool
+    +StartAcquisition() : bool
+    +StopAcquisition() : bool
+    +SendSWTrigger() : bool
+    +CheckStatus() : bool
+    +GetEventData() : unique_ptr<vector<EventData>>
+    +PrintDeviceInfo() : void
+    +GetDeviceTreeJSON() : const json&
+    +GetType() : FirmwareType
+  }
+}
+
+package "Decoder Implementations" {
+  class PSD1Decoder {
+    -fTimeStep: uint32_t
+    -fDumpFlag: bool
+    -fModuleNumber: uint8_t
+    +SetTimeStep(timeStep: uint32_t) : void
+    +SetDumpFlag(dumpFlag: bool) : void
+    +SetModuleNumber(moduleNumber: uint8_t) : void
+    +AddData(rawData: unique_ptr<RawData_t>) : DataType
+    +GetEventData() : unique_ptr<vector<EventData>>
+    -DecodeTimestamp() : uint64_t
+    -DecodeWaveform() : void
+  }
+  
+  class PSD2Decoder {
+    -fTimeStep: uint32_t
+    -fDumpFlag: bool
+    -fModuleNumber: uint8_t
+    +SetTimeStep(timeStep: uint32_t) : void
+    +SetDumpFlag(dumpFlag: bool) : void
+    +SetModuleNumber(moduleNumber: uint8_t) : void
+    +AddData(rawData: unique_ptr<RawData_t>) : DataType
+    +GetEventData() : unique_ptr<vector<EventData>>
+    -ProcessPSDData() : void
+  }
+  
+  class PHA1Decoder {
+    -fTimeStep: uint32_t
+    -fDumpFlag: bool
+    -fModuleNumber: uint8_t
+    +SetTimeStep(timeStep: uint32_t) : void
+    +SetDumpFlag(dumpFlag: bool) : void
+    +SetModuleNumber(moduleNumber: uint8_t) : void
+    +AddData(rawData: unique_ptr<RawData_t>) : DataType
+    +GetEventData() : unique_ptr<vector<EventData>>
+    -ProcessPHAData() : void
+  }
+}
+
+package "Factory & Configuration" {
+  class DigitizerFactory {
+    +{static} Create(type: FirmwareType, handle: uint64_t, moduleNumber: uint8_t) : unique_ptr<IDigitizer>
+    -CreateDigitizer1(handle: uint64_t, moduleNumber: uint8_t) : unique_ptr<IDigitizer>
+    -CreateDigitizer2(handle: uint64_t, moduleNumber: uint8_t) : unique_ptr<IDigitizer>
+  }
+  
+  class ConfigurationManager {
+    -fConfig: json
+    -fConfigFile: string
+    +ConfigurationManager(configFile: string)
+    +LoadConfiguration() : bool
+    +GetConfiguration() : const json&
+    +ValidateConfiguration() : bool
+  }
+}
+
+' Interface relationships
+IDigitizer <|.. Digitizer : implements
+IDecoder <|.. PSD1Decoder : implements
+IDecoder <|.. PSD2Decoder : implements  
+IDecoder <|.. PHA1Decoder : implements
+
+' Inheritance relationships
+Digitizer <|-- Digitizer1 : extends
+Digitizer <|-- Digitizer2 : extends
+
+' Composition relationships
+Digitizer1 --> PSD1Decoder : uses
+Digitizer1 --> PHA1Decoder : uses
+Digitizer2 --> PSD2Decoder : uses
+
+DigitizerFactory --> IDigitizer : creates
+ConfigurationManager --> IDigitizer : configures
+Digitizer --> ConfigurationManager : uses
+Digitizer --> IDecoder : aggregates
+
+' Enum relationships
+IDigitizer --> FirmwareType : returns
+IDecoder --> DataType : returns
+
+@enduml

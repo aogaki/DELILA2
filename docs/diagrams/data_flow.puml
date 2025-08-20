@@ -1,0 +1,130 @@
+@startuml data_flow
+!theme plain
+title DELILA2 Data Flow Architecture
+
+actor "Hardware\nDigitizer" as HW
+participant "IDigitizer\nImplementation" as Digitizer
+participant "IDecoder\nImplementation" as Decoder
+participant "Application\nCode" as App
+participant "DataProcessor\n(Serializer)" as Serializer
+participant "ZMQTransport" as Transport
+participant "Network" as Net
+participant "Remote\nConsumer" as Consumer
+
+== Data Acquisition Phase ==
+
+HW -> Digitizer : Raw data interrupt
+activate Digitizer
+Digitizer -> Decoder : AddData(rawData)
+activate Decoder
+Decoder -> Decoder : Process raw data\ninto EventData
+return DataType status
+Digitizer -> Digitizer : Buffer events
+deactivate Digitizer
+
+== Data Retrieval Phase ==
+
+App -> Digitizer : GetEventData()
+activate Digitizer
+Digitizer -> Decoder : GetEventData()
+activate Decoder
+return vector<EventData>
+return vector<EventData>
+
+== NEW API: Separated Serialization ==
+
+group User-Controlled Serialization
+  App -> Serializer : Encode(events, sequence)
+  activate Serializer
+  Serializer -> Serializer : Create BinaryDataHeader
+  Serializer -> Serializer : Serialize EventData/MinimalEventData
+  
+  alt Compression Enabled
+    Serializer -> Serializer : CompressLZ4(data)
+  end
+  
+  alt Checksum Enabled  
+    Serializer -> Serializer : CalculateCRC32(data)
+  end
+  
+  return unique_ptr<vector<uint8_t>>
+  
+  App -> Transport : SendBytes(serialized_data)
+  activate Transport
+  Transport -> Net : ZMQ send
+  Net -> Consumer : Binary data packet
+  deactivate Transport
+end
+
+== Data Reception (Remote Side) ==
+
+Consumer -> Transport : ReceiveBytes()
+activate Transport
+Net -> Transport : ZMQ receive
+return unique_ptr<vector<uint8_t>>
+
+Consumer -> Serializer : Decode(received_data)
+activate Serializer
+
+Serializer -> Serializer : Parse BinaryDataHeader
+Serializer -> Serializer : Validate magic number\nand format version
+
+alt Checksum Enabled
+  Serializer -> Serializer : VerifyCRC32(data, header.checksum)
+end
+
+alt Compressed Data
+  Serializer -> Serializer : DecompressLZ4(data)
+end
+
+alt EventData Format
+  Serializer -> Serializer : DeserializeEventData()
+else MinimalEventData Format
+  Serializer -> Serializer : DeserializeMinimalEventData()
+end
+
+return pair<events, sequence>
+
+== Legacy API Support ==
+
+group Deprecated but Functional
+  note over App, Transport : OLD API: Integrated serialization
+  App -> Transport : Send(events) // deprecated
+  Transport -> Transport : Internal serialization
+  Transport -> Net : ZMQ send
+  
+  note right : Shows deprecation warning\nbut remains functional
+end
+
+== Status & Command Flow ==
+
+group Status Reporting
+  App -> Transport : SendStatus(ComponentStatus)
+  Transport -> Transport : SerializeStatus(JSON)
+  Transport -> Net : Status channel
+end
+
+group Command Handling  
+  Net -> Transport : Command channel
+  Transport -> Transport : DeserializeCommand(JSON)
+  Transport -> App : Command object
+end
+
+== Performance Characteristics ==
+
+note over Serializer
+  **MinimalEventData Performance:**
+  • 22 bytes per event (vs 500+ for EventData)
+  • 96% memory reduction
+  • 128M+ events/sec encoding
+  • 73M+ events/sec decoding
+end note
+
+note over Transport
+  **Zero-Copy Design:**
+  • unique_ptr ownership transfer
+  • No unnecessary data copying
+  • Efficient memory management
+end note
+
+@enduml

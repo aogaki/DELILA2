@@ -86,3 +86,15 @@ aogaki
 *.bz2
 
 TODO
+build*
+
+# Documentation generated files
+docs/api/
+docs/images/*.png
+docs/diagrams/*.png
+
+# Keep documentation sources
+!docs/diagrams/*.puml
+!docs/*.md
+!docs/Doxyfile
+!docs/CMakeLists.txt

@@ -1,0 +1,92 @@
+@startuml system_overview
+!theme plain
+title DELILA2 System Architecture Overview
+
+package "DELILA2 Core System" {
+  
+  package "Digitizer Library" as DigLib {
+    interface IDigitizer
+    abstract class Digitizer
+    class Digitizer1
+    class Digitizer2
+    
+    interface IDecoder  
+    class PSD1Decoder
+    class PSD2Decoder
+    class PHA1Decoder
+    
+    class ConfigurationManager
+    class DigitizerFactory
+    
+    IDigitizer <|.. Digitizer
+    Digitizer <|-- Digitizer1
+    Digitizer <|-- Digitizer2
+    
+    IDecoder <|.. PSD1Decoder
+    IDecoder <|.. PSD2Decoder
+    IDecoder <|.. PHA1Decoder
+    
+    Digitizer1 --> PSD1Decoder : uses
+    Digitizer1 --> PHA1Decoder : uses
+    Digitizer2 --> PSD2Decoder : uses
+    
+    DigitizerFactory --> IDigitizer : creates
+    ConfigurationManager --> IDigitizer : configures
+  }
+  
+  package "Network Library" as NetLib {
+    class ZMQTransport
+    class DataProcessor
+    class Serializer
+    
+    class TransportConfig
+    class ComponentStatus
+    
+    ZMQTransport --> TransportConfig : uses
+    ZMQTransport --> ComponentStatus : handles
+    DataProcessor --> Serializer : uses
+  }
+  
+  package "Monitor Library" as MonLib {
+    class Monitor
+    class Recorder
+    
+    Monitor --> ZMQTransport : uses
+    Recorder --> ZMQTransport : uses
+  }
+  
+  package "Core Data Types" as CoreTypes {
+    class EventData
+    class MinimalEventData
+    class BinaryDataHeader
+    
+    EventData --> BinaryDataHeader : serialized with
+    MinimalEventData --> BinaryDataHeader : serialized with
+  }
+  
+}
+
+package "External Dependencies" {
+  class ZeroMQ
+  class "nlohmann::json" as JSON
+  class LZ4
+  class GoogleTest
+}
+
+' Relationships between main components
+DigLib --> CoreTypes : produces
+NetLib --> CoreTypes : transports  
+MonLib --> CoreTypes : monitors
+
+' External dependencies
+NetLib --> ZeroMQ : uses
+NetLib --> LZ4 : compression
+DigLib --> JSON : configuration
+NetLib --> JSON : status/commands
+
+' Data flow
+note top of DigLib : "Hardware Interface\n& Data Acquisition"
+note top of NetLib : "Network Transport\n& Serialization" 
+note top of MonLib : "Monitoring\n& Recording"
+
+@enduml
