@@ -321,19 +321,23 @@ TEST_F(SerializationTest, ProcessMultipleMinimalEventData) {
     EXPECT_EQ(header->format_version, FORMAT_VERSION_MINIMAL_EVENTDATA);
 }
 
-// Test deserialization (not implemented yet)
+// Test deserialization with invalid data
 TEST_F(SerializationTest, DeserializeEventData) {
-    auto test_data = std::make_unique<std::vector<uint8_t>>(100, 0xFF);  // Dummy data
+    auto test_data = std::make_unique<std::vector<uint8_t>>(100, 0xFF);  // Invalid dummy data
     
-    // This should deserialize event data (not implemented yet)
-    EXPECT_THROW(processor->Decode(test_data), std::runtime_error);
+    // This should fail gracefully by returning {nullptr, 0}
+    auto [events, sequence] = processor->Decode(test_data);
+    EXPECT_EQ(events, nullptr);
+    EXPECT_EQ(sequence, 0);
 }
 
 TEST_F(SerializationTest, DeserializeMinimalEventData) {
-    auto test_data = std::make_unique<std::vector<uint8_t>>(100, 0xFF);  // Dummy data
+    auto test_data = std::make_unique<std::vector<uint8_t>>(100, 0xFF);  // Invalid dummy data
     
-    // This should deserialize minimal event data (not implemented yet)
-    EXPECT_THROW(processor->DecodeMinimal(test_data), std::runtime_error);
+    // This should fail gracefully by returning {nullptr, 0}
+    auto [minimal_events, sequence] = processor->DecodeMinimal(test_data);
+    EXPECT_EQ(minimal_events, nullptr);
+    EXPECT_EQ(sequence, 0);
 }
 
 // Test null input handling

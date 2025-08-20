@@ -4,8 +4,6 @@ include(CMakeFindDependencyMacro)
 
 # Find required dependencies
 find_dependency(PkgConfig REQUIRED)
-# ROOT dependency removed
-find_dependency(Protobuf REQUIRED)
 
 # Find optional dependencies
 pkg_check_modules(ZMQ libzmq)

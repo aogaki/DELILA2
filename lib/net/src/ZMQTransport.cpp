@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <iostream>
 
 namespace DELILA::Net
 {
@@ -191,7 +192,27 @@ bool ZMQTransport::Connect()
     return true;
 
   } catch (const zmq::error_t &e) {
-    // Simple error handling following KISS
+    // Enhanced error handling with diagnostics for testing
+    #ifdef DEBUG
+    std::cerr << "ZMQ Connection Error: " << e.what() << " (errno: " << e.num() 
+              << ", address: " << fConfig.data_address << ")" << std::endl;
+    #endif
+    fConnected = false;
+    fDataSocket.reset();
+    fStatusSocket.reset();
+    return false;
+  } catch (const std::exception &e) {
+    #ifdef DEBUG
+    std::cerr << "ZMQ Connection Error (std::exception): " << e.what() << std::endl;
+    #endif
+    fConnected = false;
+    fDataSocket.reset();
+    fStatusSocket.reset();
+    return false;
+  } catch (...) {
+    #ifdef DEBUG
+    std::cerr << "ZMQ Connection Error: Unknown exception" << std::endl;
+    #endif
     fConnected = false;
     fDataSocket.reset();
     fStatusSocket.reset();

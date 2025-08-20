@@ -13,6 +13,7 @@
 #include <thread>
 #include <chrono>
 #include <memory>
+#include <atomic>
 
 #include "../../lib/net/include/ZMQTransport.hpp"
 #include "../../lib/net/include/DataProcessor.hpp"
@@ -24,17 +25,29 @@ using DELILA::Digitizer::EventData;
 using DELILA::Digitizer::MinimalEventData;
 using namespace std::chrono_literals;
 
+// Port manager to avoid conflicts between tests
+class IntegrationPortManager {
+private:
+    static std::atomic<int> next_port_;
+public:
+    static int GetNextPort() { 
+        return next_port_.fetch_add(1); 
+    }
+};
+
+// Initialize starting from a different range than unit tests
+std::atomic<int> IntegrationPortManager::next_port_{36000};
+
 class ByteTransportReliabilityTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Use different ports for each test to avoid conflicts
-        static int port_counter = 16000;
-        current_port_ = port_counter++;
+        // Use dynamic port allocation to avoid conflicts
+        current_port_ = IntegrationPortManager::GetNextPort();
     }
     
     void TearDown() override {
-        // Small delay to ensure sockets are properly closed
-        std::this_thread::sleep_for(10ms);
+        // Increased delay to ensure sockets are properly closed
+        std::this_thread::sleep_for(100ms);
     }
     
     // Helper to create test EventData
@@ -73,18 +86,25 @@ protected:
         return events;
     }
     
-    // Helper to setup transport
+    // Helper to setup transport with improved error handling
     void SetupTransport(ZMQTransport& transport, bool bind, const std::string& pattern = "PUB") {
         TransportConfig config;
-        config.data_address = bind ? 
-            "tcp://127.0.0.1:" + std::to_string(current_port_) :
-            "tcp://127.0.0.1:" + std::to_string(current_port_);
+        config.data_address = "tcp://127.0.0.1:" + std::to_string(current_port_);
         config.data_pattern = pattern;
         config.bind_data = bind;
         config.is_publisher = (pattern == "PUB");
         
         ASSERT_TRUE(transport.Configure(config));
+        
+        // For reliable connection, bind first, then connect with delay
         ASSERT_TRUE(transport.Connect());
+        
+        // Additional delay for socket setup, especially important for integration tests
+        if (bind) {
+            std::this_thread::sleep_for(200ms);  // Binder needs time to be ready
+        } else {
+            std::this_thread::sleep_for(100ms);  // Connector delay
+        }
     }
     
     int current_port_;
@@ -95,12 +115,12 @@ TEST_F(ByteTransportReliabilityTest, EventData_Transport_Reliability) {
     ZMQTransport sender, receiver;
     DataProcessor sender_processor, receiver_processor;
     
-    // Setup transports
-    SetupTransport(sender, true, "PUB");   // Publisher binds
-    SetupTransport(receiver, false, "SUB"); // Subscriber connects
+    // Setup transports - bind first, connect second with proper delays
+    SetupTransport(sender, true, "PUB");   // Publisher binds (includes 200ms delay)
+    SetupTransport(receiver, false, "SUB"); // Subscriber connects (includes 100ms delay)
     
-    // Allow connection to establish
-    std::this_thread::sleep_for(100ms);
+    // Additional connection stabilization time for pub/sub pattern
+    std::this_thread::sleep_for(200ms);
     
     // Create test data
     auto original_events = CreateTestEventData(10);

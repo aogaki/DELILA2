@@ -18,69 +18,126 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(PkgConfig REQUIRED)
 
 # Optional dependencies for network functionality
-# Direct path specification for ZMQ on macOS
-if(EXISTS "/opt/homebrew/lib/libzmq.dylib")
-    set(ZMQ_LIBRARIES "/opt/homebrew/lib/libzmq.dylib")
-    set(ZMQ_INCLUDE_DIRS "/opt/homebrew/include")
-    set(ZMQ_FOUND TRUE)
-    message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
-elseif(EXISTS "/usr/local/lib/libzmq.dylib")
-    set(ZMQ_LIBRARIES "/usr/local/lib/libzmq.dylib")
-    set(ZMQ_INCLUDE_DIRS "/usr/local/include")
-    set(ZMQ_FOUND TRUE)
-    message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
-elseif(EXISTS "/usr/lib/libzmq.dylib")
-    set(ZMQ_LIBRARIES "/usr/lib/libzmq.dylib")
-    set(ZMQ_INCLUDE_DIRS "/usr/include")
-    set(ZMQ_FOUND TRUE)
-    message(STATUS "Found ZMQ at: ${ZMQ_LIBRARIES}")
-else()
-    # Fallback to pkg-config, but convert library names to full paths
+# Platform-specific library detection for ZMQ
+if(APPLE)
+    # macOS with Homebrew
+    if(EXISTS "/opt/homebrew/lib/libzmq.dylib")
+        set(ZMQ_LIBRARIES "/opt/homebrew/lib/libzmq.dylib")
+        set(ZMQ_INCLUDE_DIRS "/opt/homebrew/include")
+        set(ZMQ_FOUND TRUE)
+        message(STATUS "Found ZMQ (macOS Homebrew): ${ZMQ_LIBRARIES}")
+    elseif(EXISTS "/usr/local/lib/libzmq.dylib")
+        set(ZMQ_LIBRARIES "/usr/local/lib/libzmq.dylib")
+        set(ZMQ_INCLUDE_DIRS "/usr/local/include")
+        set(ZMQ_FOUND TRUE)
+        message(STATUS "Found ZMQ (macOS local): ${ZMQ_LIBRARIES}")
+    endif()
+elseif(UNIX)
+    # Linux
+    if(EXISTS "/usr/lib/x86_64-linux-gnu/libzmq.so")
+        set(ZMQ_LIBRARIES "/usr/lib/x86_64-linux-gnu/libzmq.so")
+        set(ZMQ_INCLUDE_DIRS "/usr/include")
+        set(ZMQ_FOUND TRUE)
+        message(STATUS "Found ZMQ (Linux system): ${ZMQ_LIBRARIES}")
+    elseif(EXISTS "/usr/local/lib/libzmq.so")
+        set(ZMQ_LIBRARIES "/usr/local/lib/libzmq.so")
+        set(ZMQ_INCLUDE_DIRS "/usr/local/include")
+        set(ZMQ_FOUND TRUE)
+        message(STATUS "Found ZMQ (Linux local): ${ZMQ_LIBRARIES}")
+    elseif(EXISTS "/usr/lib/libzmq.so")
+        set(ZMQ_LIBRARIES "/usr/lib/libzmq.so")
+        set(ZMQ_INCLUDE_DIRS "/usr/include")
+        set(ZMQ_FOUND TRUE)
+        message(STATUS "Found ZMQ (Linux standard): ${ZMQ_LIBRARIES}")
+    endif()
+endif()
+
+# Fallback to pkg-config if not found via direct paths
+if(NOT ZMQ_FOUND)
     pkg_check_modules(ZMQ libzmq)
     if(ZMQ_FOUND)
         # Convert -lzmq to full path to avoid linking issues
-        find_library(ZMQ_FULL_PATH zmq PATHS ${ZMQ_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib)
+        set(ZMQ_SEARCH_PATHS ${ZMQ_LIBRARY_DIRS})
+        if(APPLE)
+            list(APPEND ZMQ_SEARCH_PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
+        elseif(UNIX)
+            list(APPEND ZMQ_SEARCH_PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
+        endif()
+        
+        find_library(ZMQ_FULL_PATH zmq PATHS ${ZMQ_SEARCH_PATHS})
         if(ZMQ_FULL_PATH)
             set(ZMQ_LIBRARIES "${ZMQ_FULL_PATH}")
-            message(STATUS "Found ZMQ via pkg-config, using full path: ${ZMQ_LIBRARIES}")
+            message(STATUS "Found ZMQ via pkg-config: ${ZMQ_LIBRARIES}")
         else()
             message(WARNING "Found ZMQ via pkg-config but couldn't resolve full path")
+            set(ZMQ_FOUND FALSE)
         endif()
+    else()
+        message(STATUS "ZMQ not found - network functionality will be disabled")
+        set(ZMQ_FOUND FALSE)
     endif()
 endif()
 
-# Direct path specification for LZ4 on macOS
-if(EXISTS "/opt/homebrew/lib/liblz4.dylib")
-    set(LZ4_LIBRARIES "/opt/homebrew/lib/liblz4.dylib")
-    set(LZ4_INCLUDE_DIRS "/opt/homebrew/include")
-    set(LZ4_FOUND TRUE)
-    message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
-elseif(EXISTS "/usr/local/lib/liblz4.dylib")
-    set(LZ4_LIBRARIES "/usr/local/lib/liblz4.dylib")
-    set(LZ4_INCLUDE_DIRS "/usr/local/include")
-    set(LZ4_FOUND TRUE)
-    message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
-elseif(EXISTS "/usr/lib/liblz4.dylib")
-    set(LZ4_LIBRARIES "/usr/lib/liblz4.dylib")
-    set(LZ4_INCLUDE_DIRS "/usr/include")
-    set(LZ4_FOUND TRUE)
-    message(STATUS "Found LZ4 at: ${LZ4_LIBRARIES}")
-else()
-    # Fallback to pkg-config, but convert library names to full paths
+# Platform-specific library detection for LZ4
+if(APPLE)
+    # macOS with Homebrew
+    if(EXISTS "/opt/homebrew/lib/liblz4.dylib")
+        set(LZ4_LIBRARIES "/opt/homebrew/lib/liblz4.dylib")
+        set(LZ4_INCLUDE_DIRS "/opt/homebrew/include")
+        set(LZ4_FOUND TRUE)
+        message(STATUS "Found LZ4 (macOS Homebrew): ${LZ4_LIBRARIES}")
+    elseif(EXISTS "/usr/local/lib/liblz4.dylib")
+        set(LZ4_LIBRARIES "/usr/local/lib/liblz4.dylib")
+        set(LZ4_INCLUDE_DIRS "/usr/local/include")
+        set(LZ4_FOUND TRUE)
+        message(STATUS "Found LZ4 (macOS local): ${LZ4_LIBRARIES}")
+    endif()
+elseif(UNIX)
+    # Linux
+    if(EXISTS "/usr/lib/x86_64-linux-gnu/liblz4.so")
+        set(LZ4_LIBRARIES "/usr/lib/x86_64-linux-gnu/liblz4.so")
+        set(LZ4_INCLUDE_DIRS "/usr/include")
+        set(LZ4_FOUND TRUE)
+        message(STATUS "Found LZ4 (Linux system): ${LZ4_LIBRARIES}")
+    elseif(EXISTS "/usr/local/lib/liblz4.so")
+        set(LZ4_LIBRARIES "/usr/local/lib/liblz4.so")
+        set(LZ4_INCLUDE_DIRS "/usr/local/include")
+        set(LZ4_FOUND TRUE)
+        message(STATUS "Found LZ4 (Linux local): ${LZ4_LIBRARIES}")
+    elseif(EXISTS "/usr/lib/liblz4.so")
+        set(LZ4_LIBRARIES "/usr/lib/liblz4.so")
+        set(LZ4_INCLUDE_DIRS "/usr/include")
+        set(LZ4_FOUND TRUE)
+        message(STATUS "Found LZ4 (Linux standard): ${LZ4_LIBRARIES}")
+    endif()
+endif()
+
+# Fallback to pkg-config if not found via direct paths
+if(NOT LZ4_FOUND)
     pkg_check_modules(LZ4 liblz4)
     if(LZ4_FOUND)
-        find_library(LZ4_FULL_PATH lz4 PATHS ${LZ4_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib)
+        set(LZ4_SEARCH_PATHS ${LZ4_LIBRARY_DIRS})
+        if(APPLE)
+            list(APPEND LZ4_SEARCH_PATHS /opt/homebrew/lib /usr/local/lib /usr/lib)
+        elseif(UNIX)
+            list(APPEND LZ4_SEARCH_PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
+        endif()
+        
+        find_library(LZ4_FULL_PATH lz4 PATHS ${LZ4_SEARCH_PATHS})
         if(LZ4_FULL_PATH)
             set(LZ4_LIBRARIES "${LZ4_FULL_PATH}")
-            message(STATUS "Found LZ4 via pkg-config, using full path: ${LZ4_LIBRARIES}")
+            message(STATUS "Found LZ4 via pkg-config: ${LZ4_LIBRARIES}")
         else()
             message(WARNING "Found LZ4 via pkg-config but couldn't resolve full path")
+            set(LZ4_FOUND FALSE)
         endif()
+    else()
+        message(STATUS "LZ4 not found - compression functionality will be disabled")
+        set(LZ4_FOUND FALSE)
     endif()
 endif()
 
 
-find_package(Protobuf QUIET)
 
 # Find ROOT (required for Monitor library)
 find_package(ROOT QUIET)
@@ -103,11 +160,20 @@ endif()
 
 # Collect all source files from lib subdirectories, excluding duplicates
 file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
-file(GLOB_RECURSE NET_SOURCES "lib/net/src/*.cpp")
-file(GLOB_RECURSE MONITOR_SOURCES "lib/monitor/src/*.cpp")
 
-# Remove duplicate EventData.cpp - use net version (contains serialization)
-list(FILTER DIGITIZER_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
+# Add network sources only if ZMQ is available
+if(ZMQ_FOUND)
+    file(GLOB_RECURSE NET_SOURCES "lib/net/src/*.cpp")
+    # Remove duplicate EventData.cpp - use net version (contains serialization)
+    list(FILTER DIGITIZER_SOURCES EXCLUDE REGEX ".*EventData\.cpp$")
+    message(STATUS "Network functionality enabled")
+else()
+    set(NET_SOURCES "")
+    message(STATUS "Network functionality disabled - ZMQ not found")
+endif()
+
+# Monitor sources (may depend on ROOT)
+file(GLOB_RECURSE MONITOR_SOURCES "lib/monitor/src/*.cpp")
 
 set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES} ${MONITOR_SOURCES})
 
@@ -144,10 +210,16 @@ target_include_directories(DELILA
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/digitizer/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/net/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/monitor/include>
         $<INSTALL_INTERFACE:include>
 )
+
+# Add network include directory only if network functionality is enabled
+if(ZMQ_FOUND)
+    target_include_directories(DELILA
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/net/include>
+    )
+endif()
 
 # Link external dependencies
 if(ZMQ_FOUND)
@@ -157,10 +229,6 @@ endif()
 if(LZ4_FOUND)
     target_link_libraries(DELILA PUBLIC ${LZ4_LIBRARIES})
     target_include_directories(DELILA PUBLIC ${LZ4_INCLUDE_DIRS})
-endif()
-if(Protobuf_FOUND)
-    target_link_libraries(DELILA PUBLIC ${Protobuf_LIBRARIES})
-    target_include_directories(DELILA PUBLIC ${Protobuf_INCLUDE_DIRS})
 endif()
 if(CAEN_FELIB)
     target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
@@ -193,7 +261,12 @@ endif()
 
 # Compiler definitions
 if(ZMQ_FOUND)
+    target_compile_definitions(DELILA PUBLIC ZMQ_FOUND)
     target_compile_definitions(DELILA PUBLIC ${ZMQ_CFLAGS_OTHER})
+endif()
+
+if(LZ4_FOUND)
+    target_compile_definitions(DELILA PUBLIC LZ4_FOUND)
 endif()
 
 # Set library properties for shared library
@@ -244,11 +317,13 @@ install(DIRECTORY lib/digitizer/include/
     FILES_MATCHING PATTERN "*.hpp"
 )
 
-# Install network library headers  
-install(DIRECTORY lib/net/include/
-    DESTINATION include/delila/net
-    FILES_MATCHING PATTERN "*.hpp"
-)
+# Install network library headers (only if network functionality is enabled)
+if(ZMQ_FOUND)
+    install(DIRECTORY lib/net/include/
+        DESTINATION include/delila/net
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+endif()
 
 # Install monitor library headers
 install(DIRECTORY lib/monitor/include/
@@ -282,3 +357,39 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/DELILA2ConfigVersion.cmake"
     DESTINATION lib/cmake/DELILA2
 )
+
+# Configuration summary
+message(STATUS "")
+message(STATUS "=========== DELILA2 Configuration Summary ===========")
+message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "")
+message(STATUS "Optional Dependencies:")
+message(STATUS "  ZMQ (Network):     ${ZMQ_FOUND}")
+message(STATUS "  LZ4 (Compression): ${LZ4_FOUND}")
+message(STATUS "  ROOT (Monitor):    ${ROOT_FOUND}")
+if(CAEN_FELIB)
+    message(STATUS "  CAEN FELib:        YES")
+else()
+    message(STATUS "  CAEN FELib:        NO")
+endif()
+message(STATUS "")
+message(STATUS "Features:")
+if(ZMQ_FOUND)
+    message(STATUS "  Network functionality: ENABLED")
+else()
+    message(STATUS "  Network functionality: DISABLED (install libzmq3-dev/zeromq-devel)")
+endif()
+if(LZ4_FOUND)
+    message(STATUS "  Compression:           ENABLED")
+else()
+    message(STATUS "  Compression:           DISABLED (install liblz4-dev/lz4-devel)")
+endif()
+if(ROOT_FOUND)
+    message(STATUS "  Monitoring:            ENABLED")
+else()
+    message(STATUS "  Monitoring:            LIMITED (install ROOT)")
+endif()
+message(STATUS "======================================================")
+message(STATUS "")

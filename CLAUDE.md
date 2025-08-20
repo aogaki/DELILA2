@@ -10,7 +10,28 @@ DELILA2 is a high-performance data acquisition system for nuclear physics experi
 
 ## Build System
 
-The project uses CMake (minimum version 3.15) as its build system.
+The project uses CMake (minimum version 3.15) as its build system with cross-platform support for Linux and macOS.
+
+### Platform-Specific Setup
+
+#### Linux Setup
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install build-essential cmake pkg-config
+sudo apt install libzmq3-dev liblz4-dev
+
+# CentOS/RHEL/Rocky Linux  
+sudo dnf install gcc-c++ cmake pkg-config
+sudo dnf install zeromq-devel lz4-devel
+```
+
+#### macOS Setup
+```bash
+# Install dependencies via Homebrew
+brew install cmake pkg-config
+brew install zeromq lz4
+```
 
 ### Build Commands
 ```bash

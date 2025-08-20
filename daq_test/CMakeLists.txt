@@ -54,9 +54,23 @@ find_library(DELILA_NET_LIB
 
 # Monitor functionality is part of the main DELILA library
 
-# Network libraries paths
-set(ZMQ_LIBRARIES /opt/homebrew/lib/libzmq.dylib)
-set(LZ4_LIBRARIES /opt/homebrew/lib/liblz4.dylib)
+# Platform-specific network library paths
+if(APPLE)
+    # macOS with Homebrew
+    if(EXISTS "/opt/homebrew/lib/libzmq.dylib")
+        set(ZMQ_LIBRARIES /opt/homebrew/lib/libzmq.dylib)
+        set(LZ4_LIBRARIES /opt/homebrew/lib/liblz4.dylib)
+    elseif(EXISTS "/usr/local/lib/libzmq.dylib")
+        set(ZMQ_LIBRARIES /usr/local/lib/libzmq.dylib)
+        set(LZ4_LIBRARIES /usr/local/lib/liblz4.dylib)
+    endif()
+elseif(UNIX)
+    # Linux
+    find_library(ZMQ_LIBRARIES NAMES zmq libzmq 
+        PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
+    find_library(LZ4_LIBRARIES NAMES lz4 liblz4 
+        PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
+endif()
 
 # Create executables
 add_executable(delila_test main.cpp)

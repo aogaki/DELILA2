@@ -7,6 +7,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
 
 // Include will fail initially - that's expected in TDD
 #include "ZMQTransport.hpp"
@@ -15,6 +16,19 @@
 using namespace DELILA::Net;
 using namespace std::chrono_literals;
 using namespace TestHelpers;
+
+// Port manager to avoid conflicts between tests
+class PortManager {
+private:
+    static std::atomic<int> next_port_;
+public:
+    static int GetNextPort() { 
+        return next_port_.fetch_add(1); 
+    }
+};
+
+// Initialize starting from a high port to avoid system conflicts
+std::atomic<int> PortManager::next_port_{35000};
 
 class ZMQTransportBytesTest : public ::testing::Test {
 protected:
@@ -47,10 +61,11 @@ protected:
         return true;
     }
 
-    // Helper to get basic configuration
+    // Helper to get basic configuration with dynamic ports
     TransportConfig GetBasicPubSubConfig() {
         TransportConfig config;
-        config.data_address = "tcp://localhost:15555";
+        current_test_port_ = PortManager::GetNextPort();
+        config.data_address = "tcp://127.0.0.1:" + std::to_string(current_test_port_);
         config.bind_data = true;
         config.data_pattern = "PUB";
         config.is_publisher = true;
@@ -59,12 +74,14 @@ protected:
 
     TransportConfig GetBasicSubConfig() {
         TransportConfig config;
-        config.data_address = "tcp://localhost:15555";
+        config.data_address = "tcp://127.0.0.1:" + std::to_string(current_test_port_);
         config.bind_data = false;  // Subscriber connects to publisher
         config.data_pattern = "SUB";
         config.is_publisher = false;
         return config;
     }
+
+    int current_test_port_ = 0;
 
     std::unique_ptr<ZMQTransport> transport;
 };
@@ -88,21 +105,19 @@ TEST_F(ZMQTransportBytesTest, SendBytesAcceptsUniquePtr) {
 
 // Phase 2.2: Test ReceiveBytes returns unique_ptr
 TEST_F(ZMQTransportBytesTest, ReceiveBytesReturnsUniquePtr) {
-    // Arrange - Create publisher and subscriber
+    // Arrange - Create publisher and subscriber with dynamic port
     auto publisher = std::make_unique<ZMQTransport>();
-    auto pub_config = GetBasicPubSubConfig();
-    pub_config.data_address = "tcp://127.0.0.1:25555";  // Use different port
+    auto pub_config = GetBasicPubSubConfig();  // This sets current_test_port_
     ASSERT_TRUE(publisher->Configure(pub_config));
     ASSERT_TRUE(publisher->Connect());
     
     auto subscriber = std::make_unique<ZMQTransport>();
-    auto sub_config = GetBasicSubConfig();
-    sub_config.data_address = "tcp://127.0.0.1:25555";  // Match publisher port
+    auto sub_config = GetBasicSubConfig();  // Uses same current_test_port_
     ASSERT_TRUE(subscriber->Configure(sub_config));
     ASSERT_TRUE(subscriber->Connect());
     
-    // Allow ZMQ to establish connection
-    std::this_thread::sleep_for(100ms);
+    // Allow ZMQ to establish connection - increased delay for reliability
+    std::this_thread::sleep_for(200ms);
     
     // Act - Send data
     auto send_data = CreateTestData(1024);
@@ -201,27 +216,35 @@ TEST_F(ZMQTransportBytesTest, SendsVariousDataSizes) {
 
 // Test PAIR pattern (bidirectional)
 TEST_F(ZMQTransportBytesTest, PairPatternBidirectional) {
-    // Arrange - Create two transports with PAIR pattern
+    // Arrange - Create two transports with PAIR pattern using dynamic port
     auto transport1 = std::make_unique<ZMQTransport>();
     auto transport2 = std::make_unique<ZMQTransport>();
     
+    int test_port = PortManager::GetNextPort();
+    std::string address = "tcp://127.0.0.1:" + std::to_string(test_port);
+    
     TransportConfig config1;
-    config1.data_address = "tcp://127.0.0.1:25556";
+    config1.data_address = address;
     config1.bind_data = true;
     config1.data_pattern = "PAIR";
     
     TransportConfig config2;
-    config2.data_address = "tcp://127.0.0.1:25556";
+    config2.data_address = address;
     config2.bind_data = false;
     config2.data_pattern = "PAIR";
     
+    // Connect transport1 first (binder)
     ASSERT_TRUE(transport1->Configure(config1));
     ASSERT_TRUE(transport1->Connect());
+    
+    // Wait longer before connecting second transport for PAIR pattern
+    std::this_thread::sleep_for(200ms);
     
     ASSERT_TRUE(transport2->Configure(config2));
     ASSERT_TRUE(transport2->Connect());
     
-    std::this_thread::sleep_for(100ms);
+    // Additional delay for PAIR pattern to fully establish
+    std::this_thread::sleep_for(200ms);
     
     // Act - Send from 1 to 2
     auto data1 = CreateTestData(512);
@@ -246,21 +269,20 @@ TEST_F(ZMQTransportBytesTest, PairPatternBidirectional) {
 
 // Test concurrent send/receive
 TEST_F(ZMQTransportBytesTest, ConcurrentSendReceive) {
-    // Arrange
+    // Arrange - Use dynamic port for this test
     auto publisher = std::make_unique<ZMQTransport>();
     auto subscriber = std::make_unique<ZMQTransport>();
     
-    auto pub_config = GetBasicPubSubConfig();
-    pub_config.data_address = "tcp://127.0.0.1:25557";
+    auto pub_config = GetBasicPubSubConfig();  // Sets current_test_port_
     ASSERT_TRUE(publisher->Configure(pub_config));
     ASSERT_TRUE(publisher->Connect());
     
-    auto sub_config = GetBasicSubConfig();
-    sub_config.data_address = "tcp://127.0.0.1:25557";
+    auto sub_config = GetBasicSubConfig();  // Uses same current_test_port_
     ASSERT_TRUE(subscriber->Configure(sub_config));
     ASSERT_TRUE(subscriber->Connect());
     
-    std::this_thread::sleep_for(100ms);
+    // Increase delay for pub/sub pattern reliability
+    std::this_thread::sleep_for(300ms);
     
     const int message_count = 100;
     std::atomic<int> received_count(0);
