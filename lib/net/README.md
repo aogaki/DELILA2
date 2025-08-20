@@ -5,7 +5,7 @@
 The DELILA2 Network Library provides high-performance data transport for nuclear physics data acquisition systems. It consists of two main components:
 
 - **DataProcessor**: Binary serialization with LZ4 compression and CRC32 validation
-- **ZMQTransport**: ZeroMQ-based transport with PUB/SUB and REQ/REP patterns
+- **ZMQTransport**: Pure byte-based ZeroMQ transport with PUB/SUB and PUSH/PULL patterns
 
 ## Quick Start
 
@@ -54,34 +54,30 @@ event->analogProbe1 = {100, 150, 200, 180, 120};
 event->digitalProbe1 = {1, 1, 0, 1, 0};
 ```
 
-### 2. Serializer
+### 2. DataProcessor
 
 High-performance binary serialization with compression:
 
 ```cpp
-#include "Serializer.hpp"
+#include "DataProcessor.hpp"
 using namespace DELILA::Net;
 
-Serializer serializer;
-
-// Enable features
-serializer.EnableCompression(true);
-serializer.EnableChecksum(true);
+DataProcessor processor;
 
 // Serialize events
 auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
 events->push_back(std::move(event));
 
 uint64_t sequence = 1;
-auto encoded = serializer.Encode(events, sequence);
+auto encoded_bytes = processor.Process(events, sequence);
 
 // Deserialize
-auto [decoded_events, sequence_num] = serializer.Decode(encoded);
+auto [decoded_events, sequence_num] = processor.Decode(encoded_bytes);
 ```
 
 ### 3. ZMQTransport
 
-ZeroMQ-based transport layer with multiple configuration options:
+Pure byte-based ZeroMQ transport layer:
 
 #### Traditional C++ Configuration
 ```cpp
@@ -100,10 +96,10 @@ transport->Configure(config);
 transport->Connect();
 
 // Send data
-transport->Send(events);
+// NEW: Separate serialization and transport\nDataProcessor processor;\nauto bytes = processor.Process(events, sequence_number);\ntransport->SendBytes(bytes);
 
 // Receive data (on subscriber side)
-auto [received_events, seq] = transport->Receive();
+// NEW: Receive bytes then deserialize\nauto bytes = transport->ReceiveBytes();\nif (bytes) {\n    auto [received_events, seq] = processor.Decode(bytes);\n}
 ```
 
 #### JSON Configuration (Recommended)
@@ -340,7 +336,7 @@ if (!transport->Configure(config)) {
 }
 
 // nullptr returns for failed operations
-auto result = transport->Receive();
+auto bytes = transport->ReceiveBytes();
 if (!result.first) {
     std::cerr << "No data received or error occurred\n";
 }

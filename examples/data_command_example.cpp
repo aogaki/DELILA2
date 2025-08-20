@@ -9,7 +9,7 @@
 #include <atomic>
 
 #include "ZMQTransport.hpp"
-#include "Serializer.hpp"
+#include "DataProcessor.hpp"
 #include "delila/core/EventData.hpp"
 #include "delila/core/MinimalEventData.hpp"
 
@@ -35,7 +35,7 @@ std::unique_ptr<std::vector<std::unique_ptr<EventData>>> CreateTestEvents(size_t
 // Simple DAQ Source (Publisher)
 class DAQSource {
 public:
-    DAQSource() : serializer_(), sequence_number_(0), running_(false) {
+    DAQSource() : processor_(), sequence_number_(0), running_(false) {
         // Configure as publisher for data, and command client
         TransportConfig config;
         config.data_address = "tcp://127.0.0.1:6000";        // Data channel
@@ -86,8 +86,8 @@ private:
             // Create some events
             auto events = CreateTestEvents(10);
             
-            // NEW: Serialize using external Serializer
-            auto serialized_data = serializer_.Encode(events, ++sequence_number_);
+            // NEW: Serialize using external DataProcessor
+            auto serialized_data = processor_.Process(events, ++sequence_number_);
             
             if (serialized_data) {
                 // NEW: Send raw bytes via transport
@@ -128,7 +128,7 @@ private:
     }
     
     ZMQTransport transport_;
-    Serializer serializer_;
+    DataProcessor processor_;
     uint64_t sequence_number_;
     std::atomic<bool> running_;
     std::thread data_thread_;
@@ -138,7 +138,7 @@ private:
 // DAQ Monitor (Subscriber + Command/Status Server)
 class DAQMonitor {
 public:
-    DAQMonitor() : serializer_(), received_count_(0), running_(false) {
+    DAQMonitor() : processor_(), received_count_(0), running_(false) {
         // Configure as subscriber for data, and command/status server
         TransportConfig config;
         config.data_address = "tcp://127.0.0.1:6000";        // Data channel
@@ -196,8 +196,8 @@ private:
             auto received_bytes = transport_.ReceiveBytes();
             
             if (received_bytes) {
-                // NEW: Deserialize using external Serializer
-                auto [events, sequence_number] = serializer_.Decode(received_bytes);
+                // NEW: Deserialize using external DataProcessor
+                auto [events, sequence_number] = processor_.Decode(received_bytes);
                 
                 if (events && !events->empty()) {
                     received_count_++;
@@ -267,7 +267,7 @@ private:
     }
     
     ZMQTransport transport_;
-    Serializer serializer_;
+    DataProcessor processor_;
     std::atomic<uint64_t> received_count_;
     std::atomic<bool> running_;
     std::thread data_thread_;

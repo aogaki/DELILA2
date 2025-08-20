@@ -85,11 +85,11 @@ class ParameterValidator
 
   // Copy semantics
   ParameterValidator(const ParameterValidator &other) = default;
-  ParameterValidator &operator=(const ParameterValidator &other) = default;
+  ParameterValidator &operator=(const ParameterValidator &other) = delete;
 
   // Move semantics
   ParameterValidator(ParameterValidator &&other) noexcept = default;
-  ParameterValidator &operator=(ParameterValidator &&other) noexcept = default;
+  ParameterValidator &operator=(ParameterValidator &&other) noexcept = delete;
 
   // Main validation methods
   ValidationSummary ValidateParameters(

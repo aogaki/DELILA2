@@ -156,3 +156,5 @@ static void BM_MinimalEventDataCopy(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * state.range(0));
 }
 BENCHMARK(BM_MinimalEventDataCopy)->Range(100, 10000)->Unit(benchmark::kMicrosecond);
+
+BENCHMARK_MAIN();

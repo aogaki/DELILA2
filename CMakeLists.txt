@@ -205,9 +205,14 @@ set_target_properties(DELILA PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
-# Enable testing
-enable_testing()
-add_subdirectory(tests)
+# Option to build tests
+option(BUILD_TESTS "Build tests" ON)
+
+# Enable testing only if requested
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # Add examples (commented out for standalone library build)
 # add_subdirectory(examples)

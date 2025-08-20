@@ -1,4 +1,5 @@
 #include "ZMQTransport.hpp"
+
 #include <cstring>
 #include <fstream>
 
@@ -21,9 +22,9 @@ bool ZMQTransport::Configure(const TransportConfig &config)
   if (config.data_address.empty()) {
     return false;  // Reject empty address
   }
-  
+
   // Validate data pattern
-  if (config.data_pattern != "PUB" && config.data_pattern != "SUB" && 
+  if (config.data_pattern != "PUB" && config.data_pattern != "SUB" &&
       config.data_pattern != "PUSH" && config.data_pattern != "PULL" &&
       config.data_pattern != "DEALER" && config.data_pattern != "ROUTER" &&
       config.data_pattern != "PAIR") {
@@ -36,12 +37,12 @@ bool ZMQTransport::Configure(const TransportConfig &config)
   return true;  // Accept valid configuration
 }
 
-bool ZMQTransport::ConfigureFromJSON(const nlohmann::json& config)
+bool ZMQTransport::ConfigureFromJSON(const nlohmann::json &config)
 {
   try {
     // Create TransportConfig from JSON (KISS approach)
     TransportConfig transport_config;
-    
+
     // Simple JSON parsing for essential fields only
     if (config.contains("data_address")) {
       transport_config.data_address = config["data_address"];
@@ -61,38 +62,38 @@ bool ZMQTransport::ConfigureFromJSON(const nlohmann::json& config)
     if (config.contains("is_publisher")) {
       transport_config.is_publisher = config["is_publisher"];
     }
-    
+
     return Configure(transport_config);
-    
-  } catch (const nlohmann::json::exception& e) {
+
+  } catch (const nlohmann::json::exception &e) {
     return false;
   } catch (...) {
     return false;
   }
 }
 
-bool ZMQTransport::ConfigureFromFile(const std::string& filename)
+bool ZMQTransport::ConfigureFromFile(const std::string &filename)
 {
   try {
     std::ifstream file(filename);
     if (!file.is_open()) {
       return false;  // File not found or not readable
     }
-    
+
     std::string file_content((std::istreambuf_iterator<char>(file)),
                              std::istreambuf_iterator<char>());
     file.close();
-    
+
     if (file_content.empty()) {
       return false;  // Empty file
     }
-    
+
     nlohmann::json config = nlohmann::json::parse(file_content);
     return ConfigureFromJSON(config);
-    
-  } catch (const nlohmann::json::parse_error& e) {
+
+  } catch (const nlohmann::json::parse_error &e) {
     return false;
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     return false;
   } catch (...) {
     return false;
@@ -109,20 +110,24 @@ bool ZMQTransport::Connect()
   try {
     // Determine effective pattern
     std::string effective_pattern = fConfig.data_pattern;
-    
+
     // Backward compatibility: If still using default "PUB", determine pattern from is_publisher
     if (effective_pattern == "PUB" && !fConfig.is_publisher) {
       effective_pattern = "SUB";
     }
-    
+
     // Create sockets based on effective pattern
-    if (effective_pattern == "PUB" || effective_pattern == "PUSH" || effective_pattern == "DEALER") {
+    if (effective_pattern == "PUB" || effective_pattern == "PUSH" ||
+        effective_pattern == "DEALER") {
       // Sending patterns
       int socket_type;
-      if (effective_pattern == "PUB") socket_type = ZMQ_PUB;
-      else if (effective_pattern == "PUSH") socket_type = ZMQ_PUSH;
-      else socket_type = ZMQ_DEALER;
-      
+      if (effective_pattern == "PUB")
+        socket_type = ZMQ_PUB;
+      else if (effective_pattern == "PUSH")
+        socket_type = ZMQ_PUSH;
+      else
+        socket_type = ZMQ_DEALER;
+
       fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
 
       if (fConfig.bind_data) {
@@ -130,13 +135,17 @@ bool ZMQTransport::Connect()
       } else {
         fDataSocket->connect(fConfig.data_address);
       }
-    } else if (effective_pattern == "SUB" || effective_pattern == "PULL" || effective_pattern == "ROUTER") {
+    } else if (effective_pattern == "SUB" || effective_pattern == "PULL" ||
+               effective_pattern == "ROUTER") {
       // Receiving patterns
       int socket_type;
-      if (effective_pattern == "SUB") socket_type = ZMQ_SUB;
-      else if (effective_pattern == "PULL") socket_type = ZMQ_PULL;
-      else socket_type = ZMQ_ROUTER;
-      
+      if (effective_pattern == "SUB")
+        socket_type = ZMQ_SUB;
+      else if (effective_pattern == "PULL")
+        socket_type = ZMQ_PULL;
+      else
+        socket_type = ZMQ_ROUTER;
+
       fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
 
       // SUB sockets need subscription filter
@@ -155,7 +164,7 @@ bool ZMQTransport::Connect()
     } else if (effective_pattern == "PAIR") {
       // PAIR pattern: Exclusive 1:1 communication (both send and receive)
       fDataSocket = std::make_unique<zmq::socket_t>(*fContext, ZMQ_PAIR);
-      
+
       // Set receive timeout
       fDataSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
 
@@ -207,7 +216,7 @@ void ZMQTransport::Disconnect()
 }
 
 // Core byte-based transport implementation
-bool ZMQTransport::SendBytes(std::unique_ptr<std::vector<uint8_t>>& data)
+bool ZMQTransport::SendBytes(std::unique_ptr<std::vector<uint8_t>> &data)
 {
   // Must be connected first
   if (!fConnected || !fDataSocket) {
@@ -223,7 +232,7 @@ bool ZMQTransport::SendBytes(std::unique_ptr<std::vector<uint8_t>>& data)
     // Create message and copy data
     zmq::message_t message(data->size());
     std::memcpy(message.data(), data->data(), data->size());
-    
+
     // Clear the original data to indicate ownership transfer
     data.reset();
 
@@ -322,12 +331,12 @@ std::string ZMQTransport::SerializeStatus(const ComponentStatus &status) const
   json << "\"state\":\"" << status.state << "\",";
   json << "\"error_message\":\"" << status.error_message << "\",";
   json << "\"heartbeat_counter\":" << status.heartbeat_counter;
-  
+
   // Serialize metrics map
   if (!status.metrics.empty()) {
     json << ",\"metrics\":{";
     bool first = true;
-    for (const auto& [key, value] : status.metrics) {
+    for (const auto &[key, value] : status.metrics) {
       if (!first) json << ",";
       json << "\"" << key << "\":" << value;
       first = false;
@@ -384,8 +393,8 @@ std::unique_ptr<ComponentStatus> ZMQTransport::DeserializeStatus(
       status->heartbeat_counter = std::stoull(counter_str);
     }
   }
-  
+
   return status;
 }
 
-} // namespace DELILA::Net
+}  // namespace DELILA::Net

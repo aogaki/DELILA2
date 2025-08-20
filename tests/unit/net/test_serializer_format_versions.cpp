@@ -1,52 +1,52 @@
 #include <gtest/gtest.h>
-#include "../../../lib/net/include/Serializer.hpp"
+#include "../../../lib/net/include/DataProcessor.hpp"
 #include "../../../include/delila/core/MinimalEventData.hpp"
 
 using namespace DELILA::Net;
 using DELILA::Digitizer::MinimalEventData;
 
-class SerializerFormatTest : public ::testing::Test {
+class DataProcessorFormatTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        serializer = std::make_unique<Serializer>();
+        processor = std::make_unique<DataProcessor>();
     }
     
-    std::unique_ptr<Serializer> serializer;
+    std::unique_ptr<DataProcessor> processor;
 };
 
 // Format version constants test
-TEST_F(SerializerFormatTest, FormatVersionConstantsExist) {
+TEST_F(DataProcessorFormatTest, FormatVersionConstantsExist) {
     // Test that format version constants are defined
     EXPECT_EQ(FORMAT_VERSION_EVENTDATA, 1);
     EXPECT_EQ(FORMAT_VERSION_MINIMAL_EVENTDATA, 2);
 }
 
 // TDD RED phase - This test should fail because MinimalEventData encoding doesn't exist yet
-TEST_F(SerializerFormatTest, EncodeMinimalEventDataVector) {
+TEST_F(DataProcessorFormatTest, EncodeMinimalEventDataVector) {
     // Create test MinimalEventData
     auto events = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
     events->push_back(std::make_unique<MinimalEventData>(1, 2, 1234.5, 100, 50, 0x01));
     events->push_back(std::make_unique<MinimalEventData>(2, 3, 2345.6, 200, 75, 0x02));
     
     // This should call MinimalEventData encode method (doesn't exist yet)
-    auto encoded = serializer->Encode(events, 42);
+    auto encoded = processor->Process(events, 42);
     
     EXPECT_NE(encoded, nullptr);
     EXPECT_GT(encoded->size(), BINARY_DATA_HEADER_SIZE);
 }
 
 // TDD RED phase - This test should fail because MinimalEventData decoding doesn't exist yet  
-TEST_F(SerializerFormatTest, DecodeMinimalEventDataVector) {
+TEST_F(DataProcessorFormatTest, DecodeMinimalEventDataVector) {
     // First encode some test data
     auto originalEvents = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
     originalEvents->push_back(std::make_unique<MinimalEventData>(1, 2, 1234.5, 100, 50, 0x01));
     originalEvents->push_back(std::make_unique<MinimalEventData>(2, 3, 2345.6, 200, 75, 0x02));
     
-    auto encoded = serializer->Encode(originalEvents, 42);
+    auto encoded = processor->Process(originalEvents, 42);
     ASSERT_NE(encoded, nullptr);
     
-    // This should call MinimalEventData decode method (doesn't exist yet)
-    auto decoded = serializer->DecodeMinimalEventData(encoded);
+    // This should call MinimalEventData decode method
+    auto decoded = processor->DecodeMinimal(encoded);
     
     EXPECT_NE(decoded.first, nullptr);
     EXPECT_EQ(decoded.second, 42); // sequence number
@@ -54,7 +54,7 @@ TEST_F(SerializerFormatTest, DecodeMinimalEventDataVector) {
 }
 
 // Backward compatibility test - ensure EventData still works
-TEST_F(SerializerFormatTest, BackwardCompatibleWithEventData) {
+TEST_F(DataProcessorFormatTest, BackwardCompatibleWithEventData) {
     // This test verifies that existing EventData encoding/decoding still works
     // Note: We can't create EventData easily here without more dependencies
     // So this is a placeholder that compiles and represents the test intent
@@ -62,12 +62,12 @@ TEST_F(SerializerFormatTest, BackwardCompatibleWithEventData) {
 }
 
 // Size validation test - verify MinimalEventData size efficiency
-TEST_F(SerializerFormatTest, MinimalEventDataSizeOptimization) {
+TEST_F(DataProcessorFormatTest, MinimalEventDataSizeOptimization) {
     // Create test MinimalEventData
     auto events = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
     events->push_back(std::make_unique<MinimalEventData>(1, 2, 1234.5, 100, 50, 0x01));
     
-    auto encoded = serializer->Encode(events, 42);
+    auto encoded = processor->Process(events, 42);
     ASSERT_NE(encoded, nullptr);
     
     // Verify size: header (64 bytes) + 1 event (22 bytes) = 86 bytes total
@@ -80,18 +80,18 @@ TEST_F(SerializerFormatTest, MinimalEventDataSizeOptimization) {
 }
 
 // Round-trip test - encode then decode and verify data integrity
-TEST_F(SerializerFormatTest, MinimalEventDataRoundTrip) {
+TEST_F(DataProcessorFormatTest, MinimalEventDataRoundTrip) {
     // Create original test data
     auto originalEvents = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
     originalEvents->push_back(std::make_unique<MinimalEventData>(1, 2, 1234.5, 100, 50, 0x01));
     originalEvents->push_back(std::make_unique<MinimalEventData>(3, 4, 5678.9, 200, 75, 0x06));
     
     // Encode
-    auto encoded = serializer->Encode(originalEvents, 123);
+    auto encoded = processor->Process(originalEvents, 123);
     ASSERT_NE(encoded, nullptr);
     
     // Decode
-    auto decoded = serializer->DecodeMinimalEventData(encoded);
+    auto decoded = processor->DecodeMinimal(encoded);
     ASSERT_NE(decoded.first, nullptr);
     ASSERT_EQ(decoded.first->size(), 2);
     EXPECT_EQ(decoded.second, 123); // sequence number

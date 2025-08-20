@@ -10,7 +10,7 @@
 #include <thread>
 #include "delila/core/MinimalEventData.hpp"
 #include "delila/net/ZMQTransport.hpp"
-#include "delila/net/Serializer.hpp"
+#include "delila/net/DataProcessor.hpp"
 
 using namespace DELILA::Digitizer;
 using namespace DELILA::Net;
@@ -107,10 +107,10 @@ void SerializationExample() {
     auto events = CreateTestEvents(100, 2);
     
     // Serialize with MinimalEventData format
-    Serializer serializer(FORMAT_VERSION_MINIMAL_EVENTDATA);
+    DataProcessor processor(FORMAT_VERSION_MINIMAL_EVENTDATA);
     
     auto start = std::chrono::high_resolution_clock::now();
-    auto encoded = serializer.Encode(events, 12345);  // sequence number
+    auto encoded = processor.Process(events, 12345);  // sequence number
     auto end = std::chrono::high_resolution_clock::now();
     
     if (encoded) {
@@ -124,7 +124,7 @@ void SerializationExample() {
         
         // Deserialize
         start = std::chrono::high_resolution_clock::now();
-        auto [decoded_events, sequence] = serializer.DecodeMinimalEventData(*encoded);
+        auto [decoded_events, sequence] = processor.DecodeMinimalEventData(*encoded);
         end = std::chrono::high_resolution_clock::now();
         
         duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -248,9 +248,9 @@ void NetworkTransportExample_NewAPI() {
         std::cout << "Sending 1000 MinimalEventData events (NEW API)...\n";
         
         // Step 1: Serialize externally
-        Serializer serializer;
+        DataProcessor processor;
         uint64_t sequence_number = 42;
-        auto serialized_bytes = serializer.Encode(events, sequence_number);
+        auto serialized_bytes = processor.Process(events, sequence_number);
         
         if (serialized_bytes) {
             std::cout << "Serialized to " << serialized_bytes->size() << " bytes\n";
@@ -265,8 +265,8 @@ void NetworkTransportExample_NewAPI() {
                     std::cout << "Received " << received_bytes->size() << " bytes\n";
                     
                     // Step 4: Deserialize externally
-                    Serializer deserializer;
-                    auto [received_events, received_seq] = deserializer.Decode(received_bytes);
+                    DataProcessor deprocessor;
+                    auto [received_events, received_seq] = deprocessor.Decode(received_bytes);
                     
                     if (received_events) {
                         std::cout << "Deserialized " << received_events->size() << " events\n";
@@ -335,9 +335,9 @@ void PerformanceBenchmark() {
         total_creation_time += std::chrono::duration<double>(end - start).count();
         
         // Measure serialization time
-        Serializer serializer(FORMAT_VERSION_MINIMAL_EVENTDATA);
+        DataProcessor processor(FORMAT_VERSION_MINIMAL_EVENTDATA);
         start = std::chrono::high_resolution_clock::now();
-        auto encoded = serializer.Encode(events, i);
+        auto encoded = processor.Process(events, i);
         end = std::chrono::high_resolution_clock::now();
         
         total_serialization_time += std::chrono::duration<double>(end - start).count();

@@ -122,51 +122,8 @@ TEST_F(ZMQTransportBytesTest, ReceiveBytesReturnsUniquePtr) {
 }
 
 // Phase 2.3: Test zero-copy optimization with ownership transfer
-TEST_F(ZMQTransportBytesTest, ZeroCopyOwnershipTransfer) {
-    // Arrange
-    auto config = GetBasicPubSubConfig();
-    ASSERT_TRUE(transport->Configure(config));
-    ASSERT_TRUE(transport->Connect());
-    
-    // Enable zero-copy
-    transport->EnableZeroCopy(true);
-    EXPECT_TRUE(transport->IsZeroCopyEnabled());
-    
-    auto data = CreateTestData(1024);
-    auto* data_ptr = data.get(); // Keep raw pointer to verify
-    
-    // Act
-    bool result = transport->SendBytes(data);
-    
-    // Assert
-    EXPECT_TRUE(result);
-    EXPECT_EQ(data, nullptr); // Ownership transferred
-    // Note: Can't verify data_ptr is still valid as ZMQ owns it now
-}
-
-// Phase 2.4: Test memory pool with byte buffers
-TEST_F(ZMQTransportBytesTest, MemoryPoolWithByteBuffers) {
-    // Arrange
-    auto config = GetBasicPubSubConfig();
-    ASSERT_TRUE(transport->Configure(config));
-    ASSERT_TRUE(transport->Connect());
-    
-    // Enable memory pool
-    transport->EnableMemoryPool(true);
-    transport->SetMemoryPoolSize(10);
-    EXPECT_TRUE(transport->IsMemoryPoolEnabled());
-    EXPECT_EQ(transport->GetMemoryPoolSize(), 10);
-    
-    // Act - Send multiple messages
-    for (int i = 0; i < 5; ++i) {
-        auto data = CreateTestData(1024);
-        EXPECT_TRUE(transport->SendBytes(data));
-    }
-    
-    // Assert - Pool should have some buffers
-    // Note: Exact behavior depends on implementation
-    EXPECT_GE(transport->GetPooledContainerCount(), 0);
-}
+// Removed over-engineered zero-copy and memory pool tests
+// The std::unique_ptr with std::move already provides optimal memory management
 
 // Phase 2.5: Test null pointer handling
 TEST_F(ZMQTransportBytesTest, SendBytesHandlesNullPointer) {

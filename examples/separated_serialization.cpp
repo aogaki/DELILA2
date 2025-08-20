@@ -4,7 +4,7 @@
  * 
  * This example shows how to:
  * - Use the new byte-based ZMQTransport interface (SendBytes/ReceiveBytes)
- * - Manually control serialization with external Serializer
+ * - Manually control serialization with external DataProcessor
  * - Compare old vs new API approaches
  * - Demonstrate the benefits of separation of concerns
  */
@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "ZMQTransport.hpp"
-#include "Serializer.hpp"
+#include "DataProcessor.hpp"
 #include "delila/core/EventData.hpp"
 #include "delila/core/MinimalEventData.hpp"
 
@@ -72,7 +72,7 @@ void DemonstrateOldAPI() {
         
         if (sent) {
             std::cout << "✓ Sent " << events->size() << " events using old API\n";
-            std::cout << "  NOTE: This creates an internal serializer inside ZMQTransport\n";
+            std::cout << "  NOTE: This creates an internal processor inside ZMQTransport\n";
             std::cout << "  NOTE: Sequence number is managed by transport layer\n";
             std::cout << "  NOTE: You have no control over serialization format\n";
         } else {
@@ -110,13 +110,13 @@ void DemonstrateNewAPI() {
         }
         
         // NEW WAY: Explicit external serialization
-        Serializer serializer;
+        DataProcessor processor;
         uint64_t sequence_number = 1;
         
         auto events = CreateTestEvents(5);
         
         std::cout << "Step 1: Serializing events externally...\n";
-        auto serialized_bytes = serializer.Encode(events, sequence_number);
+        auto serialized_bytes = processor.Process(events, sequence_number);
         
         if (serialized_bytes) {
             std::cout << "✓ Serialized " << events->size() << " events into " 
@@ -176,12 +176,12 @@ void DemonstrateReceiving() {
         std::this_thread::sleep_for(100ms);
         
         // Send data
-        Serializer sender_serializer;
+        DataProcessor sender_processor;
         uint64_t seq = 42;
         auto events = CreateTestEvents(3);
         
         std::cout << "Sending data...\n";
-        auto bytes = sender_serializer.Encode(events, seq);
+        auto bytes = sender_processor.Process(events, seq);
         if (bytes && sender.SendBytes(bytes)) {
             std::cout << "✓ Sent " << events->size() << " events\n";
         }
@@ -196,8 +196,8 @@ void DemonstrateReceiving() {
             std::cout << "✓ Received " << received_bytes->size() << " bytes\n";
             
             // Deserialize
-            Serializer receiver_serializer;
-            auto [received_events, received_seq] = receiver_serializer.Decode(received_bytes);
+            DataProcessor receiver_processor;
+            auto [received_events, received_seq] = receiver_processor.Decode(received_bytes);
             
             if (received_events) {
                 std::cout << "✓ Deserialized " << received_events->size() 
@@ -226,7 +226,7 @@ void DemonstrateReceiving() {
 
 void DemonstrateAdvancedUsage() {
     std::cout << "\n=== ADVANCED USAGE ===\n";
-    std::cout << "Multiple serializers, custom sequence management, etc.\n";
+    std::cout << "Multiple processors, custom sequence management, etc.\n";
     
     try {
         ZMQTransport transport;
@@ -239,22 +239,22 @@ void DemonstrateAdvancedUsage() {
         transport.Configure(config);
         transport.Connect();
         
-        // Multiple serializers for different purposes
-        Serializer high_precision_serializer;
-        Serializer compact_serializer;
+        // Multiple processors for different purposes
+        DataProcessor high_precision_processor;
+        DataProcessor compact_processor;
         
         // Custom sequence number management
         uint64_t global_sequence = 1000;
         
         // Send different types of data
-        std::cout << "Sending EventData with high precision serializer...\n";
+        std::cout << "Sending EventData with high precision processor...\n";
         auto full_events = CreateTestEvents(2);
-        auto full_bytes = high_precision_serializer.Encode(full_events, global_sequence++);
+        auto full_bytes = high_precision_processor.Process(full_events, global_sequence++);
         if (full_bytes && transport.SendBytes(full_bytes)) {
             std::cout << "✓ Sent full EventData (seq: " << (global_sequence-1) << ")\n";
         }
         
-        std::cout << "Sending MinimalEventData with compact serializer...\n";
+        std::cout << "Sending MinimalEventData with compact processor...\n";
         auto minimal_events = std::make_unique<std::vector<std::unique_ptr<MinimalEventData>>>();
         for (int i = 0; i < 3; ++i) {
             auto event = std::make_unique<MinimalEventData>();
@@ -264,13 +264,13 @@ void DemonstrateAdvancedUsage() {
             minimal_events->push_back(std::move(event));
         }
         
-        auto minimal_bytes = compact_serializer.Encode(minimal_events, global_sequence++);
+        auto minimal_bytes = compact_processor.Process(minimal_events, global_sequence++);
         if (minimal_bytes && transport.SendBytes(minimal_bytes)) {
             std::cout << "✓ Sent minimal EventData (seq: " << (global_sequence-1) << ")\n";
         }
         
         std::cout << "Benefits of new approach:\n";
-        std::cout << "  - Different serializers for different data types\n";
+        std::cout << "  - Different processors for different data types\n";
         std::cout << "  - Custom sequence number schemes\n";
         std::cout << "  - User controls serialization format\n";
         std::cout << "  - Transport layer is pure and simple\n";
@@ -305,7 +305,7 @@ int main() {
     std::cout << "  ✅ Clear separation of concerns\n";
     std::cout << "  ✅ User controls serialization\n";
     std::cout << "  ✅ Easy to test transport and serialization separately\n";
-    std::cout << "  ✅ Multiple serializers possible\n";
+    std::cout << "  ✅ Multiple processors possible\n";
     std::cout << "  ✅ Zero-copy optimization with ownership transfer\n";
     std::cout << "  ✅ Transport layer is pure byte transport\n";
     
@@ -313,7 +313,7 @@ int main() {
     std::cout << "  1. Replace Send(events) with Encode() + SendBytes()\n";
     std::cout << "  2. Replace Receive() with ReceiveBytes() + Decode()\n";
     std::cout << "  3. Manage sequence numbers in your application\n";
-    std::cout << "  4. Consider multiple serializers for different use cases\n";
+    std::cout << "  4. Consider multiple processors for different use cases\n";
     
     return 0;
 }
