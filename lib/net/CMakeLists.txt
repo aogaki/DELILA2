@@ -15,9 +15,9 @@ message(STATUS "Net library using parent ZMQ config: ${ZMQ_LIBRARIES}")
 
 # Create the library
 add_library(delila_net OBJECT
-    src/Serializer.cpp
     src/ZMQTransport.cpp
     src/EventData.cpp
+    src/DataProcessor.cpp
 )
 
 # Add include directories
@@ -43,11 +43,10 @@ target_include_directories(delila_net
         ${ZMQ_INCLUDE_DIRS}
 )
 
-# Link LZ4, xxHash, and ZeroMQ libraries
+# Link LZ4 and ZeroMQ libraries
 target_link_libraries(delila_net
     PUBLIC
         ${LZ4_LIBRARIES}
-        ${XXHASH_LIBRARIES}
         ${ZMQ_LIBRARIES}
 )
 

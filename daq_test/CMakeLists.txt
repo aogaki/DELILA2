@@ -57,7 +57,6 @@ find_library(DELILA_NET_LIB
 # Network libraries paths
 set(ZMQ_LIBRARIES /opt/homebrew/lib/libzmq.dylib)
 set(LZ4_LIBRARIES /opt/homebrew/lib/liblz4.dylib)
-set(xxHash_LIBRARIES /opt/homebrew/lib/libxxhash.dylib)
 
 # Create executables
 add_executable(delila_test main.cpp)
@@ -118,7 +117,6 @@ target_link_libraries(delila_sink PRIVATE
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
-  ${xxHash_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
@@ -127,7 +125,6 @@ target_link_libraries(delila_monitor PRIVATE
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
-  ${xxHash_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
@@ -136,7 +133,6 @@ target_link_libraries(delila_recorder PRIVATE
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
-  ${xxHash_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
@@ -144,7 +140,6 @@ target_link_libraries(delila_emulator PRIVATE
   ${DELILA_NET_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
-  ${xxHash_LIBRARIES}
 )
 
 # Set output directory

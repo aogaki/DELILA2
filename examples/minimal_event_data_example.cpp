@@ -139,9 +139,9 @@ void SerializationExample() {
     }
 }
 
-// Example 4: Network transport simulation
-void NetworkTransportExample() {
-    std::cout << "\n=== Network Transport Example ===\n";
+// Example 4: Network transport simulation (OLD API - Deprecated)
+void NetworkTransportExample_OldAPI() {
+    std::cout << "\n=== Network Transport Example (OLD API - Deprecated) ===\n";
     
     try {
         // Setup publisher
@@ -171,9 +171,10 @@ void NetworkTransportExample() {
         // Allow connection to establish
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         
-        // Send events
+        // Send events (OLD API - uses internal serialization)
         auto events = CreateTestEvents(1000, 3);
-        std::cout << "Sending 1000 MinimalEventData events...\n";
+        std::cout << "Sending 1000 MinimalEventData events (OLD API)...\n";
+        std::cout << "WARNING: Using deprecated SendMinimal method\n";
         
         if (publisher.SendMinimal(events)) {
             std::cout << "Events sent successfully\n";
@@ -183,7 +184,8 @@ void NetworkTransportExample() {
             if (data_type == ZMQTransport::DataType::MINIMAL_EVENTDATA) {
                 std::cout << "Detected MinimalEventData format\n";
                 
-                // Receive events
+                // Receive events (OLD API - uses internal deserialization)
+                std::cout << "WARNING: Using deprecated ReceiveMinimal method\n";
                 auto [received_events, seq] = subscriber.ReceiveMinimal();
                 if (received_events) {
                     std::cout << "Received " << received_events->size() << " events\n";
@@ -196,6 +198,94 @@ void NetworkTransportExample() {
                                   << static_cast<int>(first->module) 
                                   << ", Channel: " 
                                   << static_cast<int>(first->channel) << "\n";
+                    }
+                }
+            }
+        }
+        
+        publisher.Disconnect();
+        subscriber.Disconnect();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Transport error: " << e.what() << "\n";
+    }
+}
+
+// Example 4b: Network transport simulation (NEW API - Recommended)
+void NetworkTransportExample_NewAPI() {
+    std::cout << "\n=== Network Transport Example (NEW API - Recommended) ===\n";
+    
+    try {
+        // Setup publisher
+        ZMQTransport publisher;
+        TransportConfig pub_config;
+        pub_config.data_address = "tcp://*:15561";  // Different port
+        pub_config.data_pattern = "PUSH";
+        pub_config.bind_data = true;
+        
+        if (!publisher.Configure(pub_config) || !publisher.Connect()) {
+            std::cerr << "Failed to setup publisher\n";
+            return;
+        }
+        
+        // Setup subscriber
+        ZMQTransport subscriber;
+        TransportConfig sub_config;
+        sub_config.data_address = "tcp://localhost:15561";
+        sub_config.data_pattern = "PULL";
+        sub_config.bind_data = false;
+        
+        if (!subscriber.Configure(sub_config) || !subscriber.Connect()) {
+            std::cerr << "Failed to setup subscriber\n";
+            return;
+        }
+        
+        // Allow connection to establish
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // NEW API: External serialization + byte transport
+        auto events = CreateTestEvents(1000, 3);
+        std::cout << "Sending 1000 MinimalEventData events (NEW API)...\n";
+        
+        // Step 1: Serialize externally
+        Serializer serializer;
+        uint64_t sequence_number = 42;
+        auto serialized_bytes = serializer.Encode(events, sequence_number);
+        
+        if (serialized_bytes) {
+            std::cout << "Serialized to " << serialized_bytes->size() << " bytes\n";
+            
+            // Step 2: Send raw bytes
+            if (publisher.SendBytes(serialized_bytes)) {
+                std::cout << "Bytes sent successfully\n";
+                
+                // Step 3: Receive raw bytes
+                auto received_bytes = subscriber.ReceiveBytes();
+                if (received_bytes) {
+                    std::cout << "Received " << received_bytes->size() << " bytes\n";
+                    
+                    // Step 4: Deserialize externally
+                    Serializer deserializer;
+                    auto [received_events, received_seq] = deserializer.Decode(received_bytes);
+                    
+                    if (received_events) {
+                        std::cout << "Deserialized " << received_events->size() << " events\n";
+                        std::cout << "Sequence number: " << received_seq << "\n";
+                        
+                        // Verify first event
+                        if (!received_events->empty()) {
+                            const auto& first = (*received_events)[0];
+                            std::cout << "First event - Module: " 
+                                      << static_cast<int>(first->module) 
+                                      << ", Channel: " 
+                                      << static_cast<int>(first->channel) << "\n";
+                        }
+                        
+                        std::cout << "Benefits of NEW API:\n";
+                        std::cout << "  ✓ User controls serialization format\n";
+                        std::cout << "  ✓ Transport only handles bytes\n";
+                        std::cout << "  ✓ Clear separation of concerns\n";
+                        std::cout << "  ✓ Easy to test each component\n";
                     }
                 }
             }
@@ -273,10 +363,15 @@ int main(int argc, char* argv[]) {
     BasicUsageExample();
     BatchProcessingExample();
     SerializationExample();
-    NetworkTransportExample();
+    
+    // Transport examples - both old and new API
+    NetworkTransportExample_OldAPI();
+    NetworkTransportExample_NewAPI();
+    
     FormatDetectionExample();
     PerformanceBenchmark();
     
     std::cout << "\n=== Examples Complete ===\n";
+    std::cout << "Note: Use NEW API for new code. OLD API is deprecated.\n";
     return 0;
 }

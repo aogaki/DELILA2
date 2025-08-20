@@ -9,7 +9,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Inherit all configuration from parent project - no independent detection needed
 message(STATUS "Examples: Using parent ZMQ config: ${ZMQ_LIBRARIES}")
 message(STATUS "Examples: Using parent LZ4 config: ${LZ4_LIBRARIES}")
-message(STATUS "Examples: Using parent xxHash config: ${XXHASH_LIBRARIES}")
 
 # Verify parent configured dependencies properly
 if(NOT ZMQ_FOUND)
@@ -17,9 +16,6 @@ if(NOT ZMQ_FOUND)
 endif()
 if(NOT LZ4_FOUND)
     message(FATAL_ERROR "LZ4 not found in parent project configuration")  
-endif()
-if(NOT XXHASH_FOUND)
-    message(FATAL_ERROR "xxHash not found in parent project configuration")
 endif()
 
 # Check if we're building as part of the main project
@@ -52,7 +48,6 @@ set(COMMON_INCLUDE_DIRS
 set(COMMON_LIBRARIES
     ${DELILA_NET_LIBRARY}
     ${LZ4_LIBRARIES}
-    ${XXHASH_LIBRARIES}
     ${ZMQ_LIBRARIES}
 )
 
@@ -125,5 +120,4 @@ install(TARGETS ${EXAMPLES}
 message(STATUS "DELILA2 Network Examples Configuration:")
 message(STATUS "  ZMQ Found: ${ZMQ_FOUND}")
 message(STATUS "  LZ4 Found: ${LZ4_FOUND}")
-message(STATUS "  xxHash Found: ${XXHASH_FOUND}")
 message(STATUS "  Net Library: ${DELILA_NET_LIBRARY}")

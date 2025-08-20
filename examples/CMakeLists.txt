@@ -71,30 +71,6 @@ if(NOT LZ4_FOUND)
     endif()
 endif()
 
-# Find xxHash
-pkg_check_modules(XXHASH libxxhash)
-if(XXHASH_FOUND AND NOT XXHASH_LIBRARIES MATCHES "^/")
-    # pkg-config found it but only gave library name, find full path
-    find_library(XXHASH_FULL_PATH
-        NAMES ${XXHASH_LIBRARIES}
-        PATHS ${XXHASH_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib
-    )
-    if(XXHASH_FULL_PATH)
-        set(XXHASH_LIBRARIES ${XXHASH_FULL_PATH})
-    endif()
-endif()
-if(NOT XXHASH_FOUND)
-    find_path(XXHASH_INCLUDE_DIRS xxhash.h
-        PATHS /opt/homebrew/include /usr/local/include /usr/include
-    )
-    find_library(XXHASH_LIBRARIES
-        NAMES xxhash
-        PATHS /opt/homebrew/lib /usr/local/lib /usr/lib
-    )
-    if(XXHASH_INCLUDE_DIRS AND XXHASH_LIBRARIES)
-        set(XXHASH_FOUND TRUE)
-    endif()
-endif()
 
 # Verify all dependencies are found
 if(NOT ZMQ_FOUND)
@@ -102,9 +78,6 @@ if(NOT ZMQ_FOUND)
 endif()
 if(NOT LZ4_FOUND)
     message(FATAL_ERROR "LZ4 not found. Please install liblz4.")
-endif()
-if(NOT XXHASH_FOUND)
-    message(FATAL_ERROR "xxHash not found. Please install libxxhash.")
 endif()
 
 # Optional: Find CAEN FELib if you want to build digitizer examples
@@ -121,17 +94,54 @@ target_link_libraries(basic_example
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
         ${LZ4_LIBRARIES}
-        ${XXHASH_LIBRARIES}
 )
 target_include_directories(basic_example
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
         ${LZ4_INCLUDE_DIRS}
-        ${XXHASH_INCLUDE_DIRS}
 )
 
-# More examples can be added here as needed
-# For now, we only have basic_example.cpp
+# Example 2: Data + Command communication with new byte-based interface
+add_executable(data_command_example data_command_example.cpp)
+target_link_libraries(data_command_example 
+    PRIVATE 
+        ${DELILA_TARGET}
+        ${ZMQ_LIBRARIES}
+        ${LZ4_LIBRARIES}
+)
+target_include_directories(data_command_example
+    PRIVATE
+        ${ZMQ_INCLUDE_DIRS}
+        ${LZ4_INCLUDE_DIRS}
+)
+
+# Example 3: Separated serialization demonstration
+add_executable(separated_serialization separated_serialization.cpp)
+target_link_libraries(separated_serialization 
+    PRIVATE 
+        ${DELILA_TARGET}
+        ${ZMQ_LIBRARIES}
+        ${LZ4_LIBRARIES}
+)
+target_include_directories(separated_serialization
+    PRIVATE
+        ${ZMQ_INCLUDE_DIRS}
+        ${LZ4_INCLUDE_DIRS}
+)
+
+# Example 4: MinimalEventData usage
+add_executable(minimal_event_data_example minimal_event_data_example.cpp)
+target_link_libraries(minimal_event_data_example 
+    PRIVATE 
+        ${DELILA_TARGET}
+        ${ZMQ_LIBRARIES}
+        ${LZ4_LIBRARIES}
+)
+target_include_directories(minimal_event_data_example
+    PRIVATE
+        ${ZMQ_INCLUDE_DIRS}
+        ${LZ4_INCLUDE_DIRS}
+)
 
 # ============================================================================
 # INSTALLATION
@@ -141,6 +151,9 @@ target_include_directories(basic_example
 install(FILES 
     CMakeLists.txt
     basic_example.cpp
+    data_command_example.cpp
+    separated_serialization.cpp
+    minimal_event_data_example.cpp
     DESTINATION share/delila2/examples
 )
 
@@ -152,6 +165,9 @@ endif()
 # Install built examples
 install(TARGETS 
     basic_example
+    data_command_example
+    separated_serialization
+    minimal_event_data_example
     DESTINATION bin
 )
 
@@ -172,11 +188,6 @@ message(STATUS "  LZ4: ${LZ4_FOUND}")
 if(LZ4_FOUND)
     message(STATUS "    - Library: ${LZ4_LIBRARIES}")
     message(STATUS "    - Include: ${LZ4_INCLUDE_DIRS}")
-endif()
-message(STATUS "  xxHash: ${XXHASH_FOUND}")
-if(XXHASH_FOUND)
-    message(STATUS "    - Library: ${XXHASH_LIBRARIES}")
-    message(STATUS "    - Include: ${XXHASH_INCLUDE_DIRS}")
 endif()
 message(STATUS "  CAEN FELib: ${CAEN_FELIB}")
 message(STATUS "")

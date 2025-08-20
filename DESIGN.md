@@ -27,7 +27,7 @@ DELILA2 follows a modular architecture with separate libraries for different fun
 ### Library Dependencies
 - **Network Library** depends on **Digitizer Library** (for EventData and MinimalEventData structures)
 - **Application Layer** uses both libraries through unified libDELILA.so
-- **External Dependencies**: ZeroMQ, LZ4, xxHash, Protocol Buffers, ROOT
+- **External Dependencies**: ZeroMQ, LZ4, Protocol Buffers, ROOT
 
 ### Build System
 - **Single Library**: All components build into libDELILA.so

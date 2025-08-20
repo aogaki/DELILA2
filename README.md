@@ -20,7 +20,7 @@ DELILA2 is a modern, modular data acquisition framework designed for high-throug
 - C++17 compatible compiler
 - ZeroMQ library
 - Google Test (for testing)
-- Optional: ROOT, LZ4, xxHash
+- Optional: ROOT, LZ4
 
 ### Build Instructions
 ```bash
@@ -57,22 +57,86 @@ auto event = std::make_unique<MinimalEventData>(
     module, channel, timeStampNs, energy, energyShort, flags
 );
 
-// Transport with automatic format selection
+// NEW API: Separated serialization (recommended)
 ZMQTransport transport;
-transport.SendMinimal(events);
+Serializer serializer;
+uint64_t sequence = 1;
 
-// Receive with format detection
-auto data_type = transport.PeekDataType();
-if (data_type == DataType::MINIMAL_EVENTDATA) {
-    auto [events, seq] = transport.ReceiveMinimal();
-}
+auto serialized_bytes = serializer.Encode(events, sequence);
+transport.SendBytes(serialized_bytes);
+
+// Receive and deserialize
+auto received_bytes = transport.ReceiveBytes();
+auto [events, seq] = serializer.Decode(received_bytes);
+
+// OLD API: Integrated serialization (deprecated)
+transport.SendMinimal(events);  // Still works, shows deprecation warning
+auto [events, seq] = transport.ReceiveMinimal();
 ```
+
+## Refactored Architecture (v2.0+)
+
+DELILA2 has been refactored to separate transport and serialization concerns, following the Single Responsibility Principle and improving modularity.
+
+### Key Changes
+- **Separated Serialization**: Transport layer now handles only raw bytes
+- **User-Controlled Serialization**: Applications manage serialization externally  
+- **Zero-Copy Optimization**: Ownership transfer with `std::unique_ptr<std::vector<uint8_t>>`
+- **Backward Compatibility**: Old API remains functional with deprecation warnings
+
+### New Architecture Benefits
+- ✅ **Better Testability**: Transport and serialization can be tested independently
+- ✅ **Improved Modularity**: Clear separation of concerns
+- ✅ **Enhanced Flexibility**: Multiple serializers, custom sequence management
+- ✅ **Performance Maintained**: No regression vs old API (validated by benchmarks)
+
+### Migration Guide
+
+#### For New Code (Recommended)
+```cpp
+// 1. Setup transport and serializer separately
+ZMQTransport transport;
+Serializer serializer;
+
+// 2. Configure transport (unchanged)
+TransportConfig config;
+config.data_address = "tcp://localhost:5555";
+transport.Configure(config);
+transport.Connect();
+
+// 3. Serialize externally, then send bytes
+auto events = CreateEvents();
+auto bytes = serializer.Encode(events, sequence_number++);
+transport.SendBytes(bytes);
+
+// 4. Receive bytes, then deserialize externally  
+auto received_bytes = transport.ReceiveBytes();
+auto [received_events, seq] = serializer.Decode(received_bytes);
+```
+
+#### For Existing Code (Migration Path)
+```cpp
+// OLD API still works - migrate gradually
+transport.Send(events);      // Shows deprecation warning
+transport.SendMinimal(events); // Shows deprecation warning
+
+// Replace with NEW API when convenient
+auto bytes = serializer.Encode(events, seq);
+transport.SendBytes(bytes);
+```
+
+### Examples
+- **[Separated Serialization](examples/separated_serialization.cpp)**: Demonstrates new API
+- **[MinimalEventData](examples/minimal_event_data_example.cpp)**: Shows both old and new approaches
+- **[Data+Command](examples/data_command_example.cpp)**: Complete application example
 
 ## Documentation
 - [System Architecture](DESIGN.md)
 - [MinimalEventData Feature Summary](MinimalEventData_Feature_Summary.md)
 - [Development Guidelines](CLAUDE.md)
-- Implementation TODOs in `TODO/` directory
+- [Performance Validation](PERFORMANCE_VALIDATION.md)
+- [API Interoperability](INTEROPERABILITY_VALIDATION.md)
+- [Refactoring Tasks](REFACTORING_TASKS.md)
 
 ## License
 See [LICENSE](LICENSE) file for details

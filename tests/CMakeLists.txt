@@ -42,16 +42,20 @@ endif()
 
 # Benchmarks (if benchmark is found and source files exist)
 if(benchmark_FOUND)
-    file(GLOB_RECURSE BENCHMARK_SOURCES 
+    # Create separate executables for each benchmark to avoid symbol conflicts
+    file(GLOB BENCHMARK_SOURCES 
         "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/*.cpp"
     )
     
     if(BENCHMARK_SOURCES)
-        add_executable(delila_benchmarks ${BENCHMARK_SOURCES})
-        target_link_libraries(delila_benchmarks
-            DELILA
-            benchmark::benchmark
-        )
+        foreach(BENCHMARK_SOURCE ${BENCHMARK_SOURCES})
+            get_filename_component(BENCHMARK_NAME ${BENCHMARK_SOURCE} NAME_WE)
+            add_executable(${BENCHMARK_NAME} ${BENCHMARK_SOURCE})
+            target_link_libraries(${BENCHMARK_NAME}
+                DELILA
+                benchmark::benchmark
+            )
+        endforeach()
     endif()
 else()
     message(STATUS "Google Benchmark not found - skipping benchmark targets")

@@ -4,7 +4,7 @@
 
 The DELILA2 Network Library provides high-performance data transport for nuclear physics data acquisition systems. It consists of two main components:
 
-- **Serializer**: Binary serialization with LZ4 compression and xxHash validation
+- **DataProcessor**: Binary serialization with LZ4 compression and CRC32 validation
 - **ZMQTransport**: ZeroMQ-based transport with PUB/SUB and REQ/REP patterns
 
 ## Quick Start
@@ -12,10 +12,10 @@ The DELILA2 Network Library provides high-performance data transport for nuclear
 ### Basic Dependencies
 ```bash
 # macOS (Homebrew)
-brew install zeromq lz4 xxhash
+brew install zeromq lz4
 
 # Ubuntu/Debian
-sudo apt-get install libzmq3-dev liblz4-dev libxxhash-dev
+sudo apt-get install libzmq3-dev liblz4-dev
 
 # Build
 mkdir build && cd build
@@ -262,7 +262,7 @@ bool success = transport->ConfigureFromFile("config.json");
 | `bind_command` | bool | false | Bind (true) or connect (false) command socket |
 | `is_publisher` | bool | true | Publisher (true) or subscriber (false) role |
 | `compression` | bool | true | Enable LZ4 compression |
-| `checksum` | bool | true | Enable xxHash checksums |
+| `checksum` | bool | true | Enable CRC32 checksums |
 | `zero_copy` | bool | false | Enable zero-copy optimization |
 | `memory_pool_enabled` | bool | true | Enable memory pool for containers |
 | `memory_pool_size` | int | 20 | Maximum containers in memory pool |

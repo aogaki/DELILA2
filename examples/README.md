@@ -10,7 +10,6 @@ Before building these examples, you must have:
 2. **Dependencies installed**:
    - ZeroMQ (libzmq)
    - LZ4 compression library
-   - xxHash library
    - (Optional) CAEN FELib for digitizer examples
 
 ## Building the Examples
@@ -61,7 +60,6 @@ To add a new example:
            DELILA2::DELILA
            ${ZMQ_LIBRARIES}
            ${LZ4_LIBRARIES}
-           ${XXHASH_LIBRARIES}
    )
    ```
 3. Update the install section if needed
