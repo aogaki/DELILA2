@@ -77,23 +77,23 @@ event->channel = 3;
 event->flags = EventData::FLAG_PILEUP;
 ```
 
-### Serializer
+### DataProcessor
 
 Handles binary serialization with compression and validation:
 
 ```cpp
-#include "Serializer.hpp"
+#include "DataProcessor.hpp"
 using namespace DELILA::Net;
 
-Serializer serializer;
-serializer.EnableCompression(true);
-serializer.EnableChecksum(true);
+DataProcessor processor;
+processor.EnableCompression(true);
+processor.EnableChecksum(true);
 
-// Serialize events
-auto encoded = serializer.Encode(events, sequenceNumber);
+// Process (serialize) events
+auto encoded = processor.Process(events, sequenceNumber);
 
-// Deserialize
-auto [decoded_events, seq] = serializer.Decode(encoded);
+// Decode (deserialize)
+auto [decoded_events, seq] = processor.Decode(encoded);
 ```
 
 ### ZMQTransport
@@ -825,88 +825,7 @@ int main() {
 }
 ```
 
-### 7. Memory Pool Optimization
-
-**Memory Pool Example** (examples/memory_pool_example.cpp):
-```cpp
-#include <iostream>
-#include <chrono>
-#include <vector>
-#include "ZMQTransport.hpp"
-#include "Serializer.hpp"
-#include "EventData.hpp"
-
-using namespace DELILA::Net;
-using namespace DELILA::Digitizer;
-
-void benchmark_with_pool(bool use_pool, int iterations) {
-    ZMQTransport transport;
-    TransportConfig config;
-    config.data_address = "tcp://*:5559";
-    config.data_pattern = "PUB";
-    config.bind_data = true;
-    
-    transport.Configure(config);
-    transport.Connect();
-    
-    // Configure memory pool
-    transport.EnableMemoryPool(use_pool);
-    if (use_pool) {
-        transport.SetMemoryPoolSize(20);
-    }
-    
-    // Also configure serializer buffer pool
-    Serializer serializer;
-    serializer.EnableBufferPool(use_pool);
-    if (use_pool) {
-        serializer.SetBufferPoolSize(20);
-    }
-    
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    for (int i = 0; i < iterations; ++i) {
-        auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
-        
-        for (int j = 0; j < 100; ++j) {
-            auto event = std::make_unique<EventData>(1024);
-            event->energy = i * 100 + j;
-            events->push_back(std::move(event));
-        }
-        
-        transport.Send(events);
-    }
-    
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
-    std::cout << (use_pool ? "With pool: " : "Without pool: ")
-              << duration.count() << " ms for " << iterations << " iterations" << std::endl;
-    
-    if (use_pool) {
-        std::cout << "Pooled containers: " << transport.GetPooledContainerCount() << std::endl;
-    }
-}
-
-int main() {
-    std::cout << "Memory Pool Performance Comparison" << std::endl;
-    std::cout << "==================================" << std::endl;
-    
-    const int iterations = 1000;
-    
-    // Warm up
-    benchmark_with_pool(false, 10);
-    
-    // Benchmark without pool
-    benchmark_with_pool(false, iterations);
-    
-    // Benchmark with pool
-    benchmark_with_pool(true, iterations);
-    
-    return 0;
-}
-```
-
-### 8. Error Handling and Recovery
+### 7. Error Handling and Recovery
 
 **Robust Client** (examples/robust_client.cpp):
 ```cpp
@@ -1184,17 +1103,15 @@ try {
 - `void EnableMemoryPool(bool enable)`
 - `void SetMemoryPoolSize(size_t size)`
 
-### Serializer Class
+### DataProcessor Class
 
 #### Configuration
 - `void EnableCompression(bool enable)`
 - `void EnableChecksum(bool enable)`
-- `void EnableBufferPool(bool enable)`
-- `void SetBufferPoolSize(size_t size)`
 
 #### Serialization
-- `std::unique_ptr<std::vector<uint8_t>> Encode(...)`
-- `std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Decode(...)`
+- `std::unique_ptr<std::vector<uint8_t>> Process(...)` - Serialize events to bytes
+- `std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t> Decode(...)` - Deserialize bytes to events
 
 ### Data Structures
 

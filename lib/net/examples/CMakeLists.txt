@@ -78,7 +78,6 @@ set(EXAMPLES
     status_monitor
     config_example
     throughput_test
-    memory_pool_example
     robust_client
     simple_test
     test_command

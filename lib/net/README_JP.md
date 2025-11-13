@@ -18,7 +18,7 @@ DELILA2ネットワークライブラリは、核物理学実験のデータ取�
 │  │  (PUB/SUB)  │   (REQ/REP)   │   (REQ/REP)   │          │
 │  └─────────────┴──────────────┴────────────────┘          │
 ├─────────────────────────────────────────────────────────────┤
-│                    Serializer クラス                         │
+│                    DataProcessor クラス                      │
 │  ┌─────────────┬──────────────┬────────────────┐          │
 │  │ バイナリ形式  │  LZ4圧縮      │ CRC32チェックサム │          │
 │  └─────────────┴──────────────┴────────────────┘          │
@@ -33,9 +33,9 @@ DELILA2ネットワークライブラリは、核物理学実験のデータ取�
 namespace DELILA {
     namespace Net {
         // ネットワーク関連クラス
-        class Serializer;
+        class DataProcessor;
         class ZMQTransport;
-        
+
         // 設定構造体
         struct TransportConfig;
         struct ComponentStatus;
@@ -45,11 +45,11 @@ namespace DELILA {
 }
 ```
 
-## Serializer クラス
+## DataProcessor クラス
 
 ### 機能概要
 
-Serializerクラスは、EventDataの高速バイナリシリアライゼーションを提供します。
+DataProcessorクラスは、EventDataの高速バイナリシリアライゼーションを提供します。
 
 #### 主な特徴
 - **バイナリ形式**: 効率的なメモリレイアウト
@@ -77,10 +77,10 @@ struct BinaryDataHeader {
 ### 使用方法
 
 ```cpp
-// シリアライザの初期化
-Serializer serializer;
-serializer.EnableCompression(true);  // LZ4圧縮を有効化
-serializer.EnableChecksum(true);     // チェックサムを有効化
+// データプロセッサの初期化
+DataProcessor processor;
+processor.EnableCompression(true);  // LZ4圧縮を有効化
+processor.EnableChecksum(true);     // チェックサムを有効化
 
 // EventDataのエンコード
 auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
@@ -406,7 +406,7 @@ if (!response.success) {
 
 ### スレッドセーフティの考慮事項
 
-1. **Serializer**: 読み取り操作はスレッドセーフ、書き込みは外部同期が必要
+1. **DataProcessor**: 読み取り操作はスレッドセーフ、書き込みは外部同期が必要
 2. **ZMQTransport**: スレッドセーフではない、スレッドごとにインスタンスを作成するか外部同期を使用
 3. **EventData**: 構築後の読み取りはスレッドセーフ
 

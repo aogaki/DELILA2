@@ -296,16 +296,16 @@ struct TransportConfig {
 };
 ```
 
-### Serializer Options
+### DataProcessor Options
 
 ```cpp
-Serializer serializer;
+DataProcessor processor;
 
 // Enable/disable compression (default: enabled)
-serializer.EnableCompression(true);
+processor.EnableCompression(true);
 
 // Enable/disable checksum validation (default: enabled)
-serializer.EnableChecksum(true);
+processor.EnableChecksum(true);
 ```
 
 ## Performance Features
@@ -350,7 +350,7 @@ if (!response.success) {
 
 ## Thread Safety
 
-- **Serializer**: Thread-safe for read operations, serialize different data in parallel
+- **DataProcessor**: Thread-safe for read operations, process different data in parallel
 - **ZMQTransport**: Not thread-safe, use one instance per thread or add external synchronization
 - **EventData**: Thread-safe for read operations after construction
 
