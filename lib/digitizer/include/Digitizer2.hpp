@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ConfigurationManager.hpp"
-#include "PSD2Decoder.hpp"
+#include "IDecoder.hpp"
 #include "../../../include/delila/core/EventData.hpp"
 #include "IDigitizer.hpp"
 #include "ParameterValidator.hpp"
@@ -73,7 +73,7 @@ class Digitizer2 : public IDigitizer
   FirmwareType fFirmwareType = FirmwareType::UNKNOWN;
 
   // === Data Processing ===
-  std::unique_ptr<PSD2Decoder> fPSD2Decoder;
+  std::unique_ptr<IDecoder> fDecoder;
   std::unique_ptr<ParameterValidator> fParameterValidator;
   bool fDataTakingFlag = false;
   std::vector<std::thread> fReadDataThreads;

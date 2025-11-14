@@ -38,6 +38,56 @@ Run with:
 ./basic_example
 ```
 
+### digitizer2_basic_example
+A complete example showing how to use the Digitizer2 interface for CAEN Digitizer 2 hardware:
+- Loading configuration from file (dig2.conf)
+- Initializing and configuring Digitizer2
+- Starting data acquisition
+- Reading event data in a loop with statistics
+- Graceful shutdown with Ctrl+C handling
+- Displaying device information and acquisition statistics
+
+**Requirements**: CAEN Digitizer 2 hardware (e.g., V2740) connected via network
+
+Run with:
+```bash
+./digitizer2_basic_example [config_file]
+# Default config file is dig2.conf
+```
+
+Example output:
+```
+========================================
+  DELILA2 Digitizer2 Basic Example
+========================================
+Press Ctrl+C to stop acquisition
+
+Configuration file: dig2.conf
+
+[1] Loading configuration...
+    Configuration loaded successfully
+
+[2] Creating Digitizer2 instance...
+    Digitizer2 instance created
+
+[3] Initializing digitizer...
+    Digitizer initialized successfully
+
+...
+```
+
+### simple_digitizer_test
+Legacy digitizer test using the Digitizer class (PSD2 firmware):
+- Demonstrates keyboard input handling for graceful shutdown
+- Shows event rate statistics
+- Uses PSD2.conf configuration
+
+Run with:
+```bash
+./simple_digitizer_test [config_file]
+# Default config file is PSD2.conf
+```
+
 ## Example Structure
 
 Each example follows a similar pattern:

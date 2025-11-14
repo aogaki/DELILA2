@@ -102,18 +102,19 @@ target_include_directories(basic_example
 )
 
 # Example 2: Data + Command communication with new byte-based interface
-add_executable(data_command_example data_command_example.cpp)
-target_link_libraries(data_command_example 
-    PRIVATE 
-        ${DELILA_TARGET}
-        ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
-)
-target_include_directories(data_command_example
-    PRIVATE
-        ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
-)
+# TEMPORARILY DISABLED - needs update for new API
+# add_executable(data_command_example data_command_example.cpp)
+# target_link_libraries(data_command_example
+#     PRIVATE
+#         ${DELILA_TARGET}
+#         ${ZMQ_LIBRARIES}
+#         ${LZ4_LIBRARIES}
+# )
+# target_include_directories(data_command_example
+#     PRIVATE
+#         ${ZMQ_INCLUDE_DIRS}
+#         ${LZ4_INCLUDE_DIRS}
+# )
 
 # Example 3: Separated serialization demonstration
 add_executable(separated_serialization separated_serialization.cpp)
@@ -131,8 +132,8 @@ target_include_directories(separated_serialization
 
 # Example 4: MinimalEventData usage
 add_executable(minimal_event_data_example minimal_event_data_example.cpp)
-target_link_libraries(minimal_event_data_example 
-    PRIVATE 
+target_link_libraries(minimal_event_data_example
+    PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
         ${LZ4_LIBRARIES}
@@ -143,17 +144,47 @@ target_include_directories(minimal_event_data_example
         ${LZ4_INCLUDE_DIRS}
 )
 
+# Example 5: Simple digitizer test (requires CAEN hardware)
+add_executable(simple_digitizer_test simple_digitizer_test.cpp)
+target_link_libraries(simple_digitizer_test
+    PRIVATE
+        ${DELILA_TARGET}
+        ${ZMQ_LIBRARIES}
+        ${LZ4_LIBRARIES}
+)
+target_include_directories(simple_digitizer_test
+    PRIVATE
+        ${ZMQ_INCLUDE_DIRS}
+        ${LZ4_INCLUDE_DIRS}
+)
+
+# Example 6: Digitizer2 basic example (requires CAEN Digitizer 2 hardware)
+add_executable(digitizer2_basic_example digitizer2_basic_example.cpp)
+target_link_libraries(digitizer2_basic_example
+    PRIVATE
+        ${DELILA_TARGET}
+        ${ZMQ_LIBRARIES}
+        ${LZ4_LIBRARIES}
+)
+target_include_directories(digitizer2_basic_example
+    PRIVATE
+        ${ZMQ_INCLUDE_DIRS}
+        ${LZ4_INCLUDE_DIRS}
+)
+
 # ============================================================================
 # INSTALLATION
 # ============================================================================
 
 # Install examples source code
-install(FILES 
+install(FILES
     CMakeLists.txt
     basic_example.cpp
-    data_command_example.cpp
+    # data_command_example.cpp  # Temporarily disabled
     separated_serialization.cpp
     minimal_event_data_example.cpp
+    simple_digitizer_test.cpp
+    digitizer2_basic_example.cpp
     DESTINATION share/delila2/examples
 )
 
@@ -163,11 +194,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/README.md)
 endif()
 
 # Install built examples
-install(TARGETS 
+install(TARGETS
     basic_example
-    data_command_example
+    # data_command_example  # Temporarily disabled
     separated_serialization
     minimal_event_data_example
+    simple_digitizer_test
+    digitizer2_basic_example
     DESTINATION bin
 )
 

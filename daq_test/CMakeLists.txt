@@ -34,12 +34,10 @@ find_library(CAEN_DIG2
     REQUIRED
 )
 
-# Find include directories
-find_path(DELILA_INCLUDE_DIR
-    NAMES delila/delila.hpp
-    PATHS /usr/local/include
-    REQUIRED
-)
+# Use local project headers instead of installed ones
+set(DELILA_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+set(DELILA_NET_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/net/include)
+set(DELILA_DIGITIZER_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/digitizer/include)
 
 # Find ROOT using newer CMake approach
 list(APPEND CMAKE_PREFIX_PATH "/opt/ROOT")
@@ -60,15 +58,19 @@ if(APPLE)
     if(EXISTS "/opt/homebrew/lib/libzmq.dylib")
         set(ZMQ_LIBRARIES /opt/homebrew/lib/libzmq.dylib)
         set(LZ4_LIBRARIES /opt/homebrew/lib/liblz4.dylib)
+        set(XXHASH_LIBRARIES /opt/homebrew/lib/libxxhash.dylib)
     elseif(EXISTS "/usr/local/lib/libzmq.dylib")
         set(ZMQ_LIBRARIES /usr/local/lib/libzmq.dylib)
         set(LZ4_LIBRARIES /usr/local/lib/liblz4.dylib)
+        set(XXHASH_LIBRARIES /usr/local/lib/libxxhash.dylib)
     endif()
 elseif(UNIX)
     # Linux
-    find_library(ZMQ_LIBRARIES NAMES zmq libzmq 
+    find_library(ZMQ_LIBRARIES NAMES zmq libzmq
         PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
-    find_library(LZ4_LIBRARIES NAMES lz4 liblz4 
+    find_library(LZ4_LIBRARIES NAMES lz4 liblz4
+        PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
+    find_library(XXHASH_LIBRARIES NAMES xxhash libxxhash
         PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib /usr/lib)
 endif()
 
@@ -95,14 +97,13 @@ target_compile_features(delila_monitor PRIVATE cxx_std_17)
 target_compile_features(delila_recorder PRIVATE cxx_std_17)
 target_compile_features(delila_emulator PRIVATE cxx_std_17)
 
-# Include directories
-target_include_directories(delila_test PRIVATE ${DELILA_INCLUDE_DIR})
-target_include_directories(delila_source PRIVATE ${DELILA_INCLUDE_DIR})
-target_include_directories(delila_sink PRIVATE ${DELILA_INCLUDE_DIR})
-target_include_directories(delila_monitor PRIVATE ${DELILA_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
-target_include_directories(delila_recorder PRIVATE ${DELILA_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
-target_include_directories(delila_emulator PRIVATE ${DELILA_INCLUDE_DIR})
-target_include_directories(delila_sink PRIVATE ${DELILA_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
+# Include directories (use local project headers)
+target_include_directories(delila_test PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR} ${DELILA_DIGITIZER_INCLUDE_DIR})
+target_include_directories(delila_source PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR} ${DELILA_DIGITIZER_INCLUDE_DIR})
+target_include_directories(delila_sink PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
+target_include_directories(delila_monitor PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
+target_include_directories(delila_recorder PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
+target_include_directories(delila_emulator PRIVATE ${DELILA_INCLUDE_DIR} ${DELILA_NET_INCLUDE_DIR})
 
 # Link libraries using modern ROOT CMake interface
 target_link_libraries(delila_test PRIVATE 
@@ -119,41 +120,49 @@ target_link_libraries(delila_test PRIVATE
 )
 
 # Link libraries for source (no ROOT needed)
-target_link_libraries(delila_source PRIVATE 
-    ${DELILA_LIB} 
-    ${CAEN_FELIB} 
+target_link_libraries(delila_source PRIVATE
+    ${DELILA_LIB}
+    ${CAEN_FELIB}
     ${CAEN_DIG2}
+    ${ZMQ_LIBRARIES}
+    ${LZ4_LIBRARIES}
+    ${XXHASH_LIBRARIES}
 )
 
 # Link libraries for sink (includes ROOT for Monitor)
-target_link_libraries(delila_sink PRIVATE 
+target_link_libraries(delila_sink PRIVATE
   ${DELILA_NET_LIB}
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
+  ${XXHASH_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
-target_link_libraries(delila_monitor PRIVATE 
+target_link_libraries(delila_monitor PRIVATE
   ${DELILA_NET_LIB}
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
+  ${XXHASH_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
-target_link_libraries(delila_recorder PRIVATE 
+target_link_libraries(delila_recorder PRIVATE
   ${DELILA_NET_LIB}
   ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
+  ${XXHASH_LIBRARIES}
   ROOT::Core ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::RIO ROOT::Net ROOT::RHTTP
 )
 
-target_link_libraries(delila_emulator PRIVATE 
+target_link_libraries(delila_emulator PRIVATE
   ${DELILA_NET_LIB}
+  ${DELILA_LIB}
   ${ZMQ_LIBRARIES}
   ${LZ4_LIBRARIES}
+  ${XXHASH_LIBRARIES}
 )
 
 # Set output directory

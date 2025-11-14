@@ -9,10 +9,12 @@
 
 // DELILA components
 #include <delila/net/ZMQTransport.hpp>
+#include <delila/net/DataProcessor.hpp>
 #include <delila/core/EventData.hpp>
 
 using DELILA::Net::ZMQTransport;
 using DELILA::Net::TransportConfig;
+using DELILA::Net::DataProcessor;
 using DELILA::Digitizer::EventData;
 
 enum class DAQState { Acquiring, Stopping };
@@ -145,7 +147,7 @@ int main(int argc, char* argv[])
   net_config.data_address = bind_address;
   net_config.data_pattern = "PUB";
   net_config.bind_data = true;
-  
+
   // Disable status and command channels for now
   net_config.status_address = net_config.data_address;
   net_config.command_address = net_config.data_address;
@@ -155,23 +157,20 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  // Enable optional features
-  if (enable_compression) {
-    transport.EnableCompression(true);
-    std::cout << "Compression enabled" << std::endl;
-  }
-  if (enable_checksum) {
-    transport.EnableChecksum(true);
-    std::cout << "Checksum enabled" << std::endl;
-  }
-
-  // Enable memory pool for better performance
-  transport.EnableMemoryPool(true);
-  transport.SetMemoryPoolSize(pool_size);
-
   if (!transport.Connect()) {
     std::cerr << "Failed to connect transport" << std::endl;
     return 1;
+  }
+
+  // Configure data processor with optional features
+  DataProcessor processor;
+  if (enable_compression) {
+    processor.EnableCompression(true);
+    std::cout << "Compression enabled" << std::endl;
+  }
+  if (enable_checksum) {
+    processor.EnableChecksum(true);
+    std::cout << "Checksum enabled" << std::endl;
   }
 
   std::cout << "Transport connected, starting data emission..." << std::endl;
@@ -227,12 +226,13 @@ int main(int argc, char* argv[])
       events->push_back(std::move(event));
     }
     
-    // Send the batch
-    if (transport.Send(events)) {
+    // Send the batch using new API
+    auto data = processor.Process(events, sequenceNumber);
+    if (data && transport.SendBytes(data)) {
       totalEvents += events_per_batch;
       totalBatches++;
       sequenceNumber++;
-      
+
       // Rotate through channels
       currentChannel = (currentChannel + 1) % num_channels;
     } else {
@@ -254,12 +254,10 @@ int main(int argc, char* argv[])
       double rate = static_cast<double>(eventsInPeriod) / timeSinceStats;
       double dataRateMBps = (rate * event_data_size) / (1024.0 * 1024.0);
       
-      std::cout << "Events: " << totalEvents 
+      std::cout << "Events: " << totalEvents
                 << " | Batches: " << totalBatches
                 << " | Rate: " << rate << " evt/s"
                 << " | Data: " << dataRateMBps << " MB/s"
-                << " | Pool: " << transport.GetPooledContainerCount() 
-                << "/" << transport.GetMemoryPoolSize() 
                 << " | Ch: " << currentChannel << std::endl;
       
       lastStatsTime = currentTime;

@@ -11,6 +11,8 @@
 #include <iterator>
 #include <thread>
 
+#include "PSD2Decoder.hpp"
+
 namespace DELILA
 {
 namespace Digitizer
@@ -187,13 +189,30 @@ bool Digitizer2::ConfigureMaxRawDataSize()
 
 bool Digitizer2::InitializeDataConverter()
 {
-  // Create PSD2Decoder converter if not already created
-  if (!fPSD2Decoder) {
-    fPSD2Decoder = std::make_unique<PSD2Decoder>(fNThreads);
+  // Create appropriate decoder based on firmware type
+  if (!fDecoder) {
+    if (fFirmwareType == FirmwareType::PSD2) {
+      fDecoder = std::make_unique<PSD2Decoder>(fNThreads);
+      std::cout << "Created PSD2Decoder" << std::endl;
+    } else if (fFirmwareType == FirmwareType::PHA2) {
+      std::cerr << "Error: PHA2Decoder not yet implemented" << std::endl;
+      std::cerr << "Please implement PHA2Decoder class for PHA firmware support"
+                << std::endl;
+      return false;
+    } else if (fFirmwareType == FirmwareType::SCOPE2) {
+      std::cerr << "Error: SCOPE2Decoder not yet implemented" << std::endl;
+      std::cerr << "Please implement SCOPE2Decoder class for SCOPE firmware support"
+                << std::endl;
+      return false;
+    } else {
+      std::cerr << "Error: Unsupported firmware type for Digitizer2: "
+                << static_cast<int>(fFirmwareType) << std::endl;
+      return false;
+    }
   }
 
-  fPSD2Decoder->SetDumpFlag(fDebugFlag);
-  fPSD2Decoder->SetModuleNumber(fModuleNumber);
+  fDecoder->SetDumpFlag(fDebugFlag);
+  fDecoder->SetModuleNumber(fModuleNumber);
   return true;
 }
 
@@ -214,7 +233,7 @@ bool Digitizer2::ConfigureSampleRate()
 
   // Calculate time per sample in nanoseconds: (1000 ns) / (rate in MHz)
   uint32_t timeStepNs = 1000 / adcSamplRateMHz;
-  fPSD2Decoder->SetTimeStep(timeStepNs);
+  fDecoder->SetTimeStep(timeStepNs);
 
   std::cout << "ADC Sample Rate: " << adcSamplRateMHz << " MHz" << std::endl;
   std::cout << "Time step: " << timeStepNs << " ns per sample" << std::endl;
@@ -286,7 +305,7 @@ bool Digitizer2::StopAcquisition()
   // Stop EventData conversion thread
   fDataTakingFlag = false;  // This will stop conversion thread too
 
-  // PSD2Decoder will stop automatically when threads join
+  // Decoder will stop automatically when threads join
 
   return status;
 }
@@ -315,9 +334,9 @@ bool Digitizer2::CheckStatus()
 std::unique_ptr<std::vector<std::unique_ptr<EventData>>>
 Digitizer2::GetEventData()
 {
-  // Get EventData directly from PSD2Decoder
-  return fPSD2Decoder
-             ? fPSD2Decoder->GetEventData()
+  // Get EventData directly from Decoder
+  return fDecoder
+             ? fDecoder->GetEventData()
              : std::make_unique<std::vector<std::unique_ptr<EventData>>>();
 }
 
@@ -373,10 +392,10 @@ void Digitizer2::ReadDataThread()
     auto err = ReadDataWithLock(rawData, timeOut);
 
     if (err == CAEN_FELib_Success) {
-      // Add data through PSD2Decoder converter ONLY
-      // Data will be converted directly by PSD2Decoder
-      if (fPSD2Decoder) {
-        fPSD2Decoder->AddData(std::move(rawData));
+      // Add data through Decoder converter ONLY
+      // Data will be converted directly by Decoder
+      if (fDecoder) {
+        fDecoder->AddData(std::move(rawData));
       }
       rawData = std::make_unique<RawData_t>(fMaxRawDataSize);
     } else if (err == CAEN_FELib_Timeout) {

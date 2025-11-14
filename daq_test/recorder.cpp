@@ -9,11 +9,13 @@
 // DELILA components
 #include <delila/monitor/Recorder.hpp>
 #include <delila/net/ZMQTransport.hpp>
+#include <delila/net/DataProcessor.hpp>
 #include <delila/core/EventData.hpp>
 
 using DELILA::Monitor::Recorder;
 using DELILA::Net::ZMQTransport;
 using DELILA::Net::TransportConfig;
+using DELILA::Net::DataProcessor;
 
 enum class DAQState { Running, Stopping };
 
@@ -116,7 +118,7 @@ int main(int argc, char* argv[])
   net_config.data_address = connect_address;
   net_config.data_pattern = "SUB";
   net_config.bind_data = false;  // Connect as subscriber
-  
+
   // Disable status and command channels for now
   net_config.status_address = net_config.data_address;
   net_config.command_address = net_config.data_address;
@@ -126,23 +128,20 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  // Enable optional features (must match source settings)
-  if (enable_compression) {
-    transport.EnableCompression(true);
-    std::cout << "Compression enabled" << std::endl;
-  }
-  if (enable_checksum) {
-    transport.EnableChecksum(true);
-    std::cout << "Checksum enabled" << std::endl;
-  }
-
-  // Enable memory pool for better performance
-  transport.EnableMemoryPool(true);
-  transport.SetMemoryPoolSize(1000);
-
   if (!transport.Connect()) {
     std::cerr << "Failed to connect transport" << std::endl;
     return 1;
+  }
+
+  // Configure data processor with optional features (must match source settings)
+  DataProcessor processor;
+  if (enable_compression) {
+    processor.EnableCompression(true);
+    std::cout << "Compression enabled" << std::endl;
+  }
+  if (enable_checksum) {
+    processor.EnableChecksum(true);
+    std::cout << "Checksum enabled" << std::endl;
   }
 
   std::cout << "Transport connected, waiting for data..." << std::endl;
@@ -182,8 +181,14 @@ int main(int argc, char* argv[])
       break;
     }
 
-    // Receive event data from network
-    auto [events, sequence] = transport.Receive();
+    // Receive event data from network using new API
+    auto data = transport.ReceiveBytes();
+    if (!data) {
+      std::this_thread::sleep_for(std::chrono::microseconds(100));
+      continue;
+    }
+
+    auto [events, sequence] = processor.Decode(data);
     
     if (events && !events->empty()) {
       totalEvents += events->size();

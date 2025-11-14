@@ -1,26 +1,33 @@
+// Simple example demonstrating PSD2 digitizer access and data acquisition
+//
+// This example shows:
+// - Loading configuration from a file
+// - Initializing and configuring a digitizer
+// - Starting data acquisition
+// - Fetching event data in a loop
+// - Displaying statistics
+// - Clean shutdown
+//
+// Usage: ./simple_digitizer_test [config_file]
+// Default config file: PSD2.conf
+
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include <chrono>
 #include <iostream>
+#include <iomanip>
 #include <thread>
 
-// DELILA components
 #include <delila/digitizer/Digitizer.hpp>
 #include <delila/digitizer/ConfigurationManager.hpp>
-#include <delila/net/ZMQTransport.hpp>
-#include <delila/net/DataProcessor.hpp>
 
 using DELILA::Digitizer::ConfigurationManager;
 using DELILA::Digitizer::Digitizer;
-using DELILA::Net::ZMQTransport;
-using DELILA::Net::TransportConfig;
-using DELILA::Net::DataProcessor;
 
-enum class DAQState { Acquiring, Stopping };
-
-DAQState GetKBInput()
+// Simple keyboard input check (non-blocking)
+bool CheckForQuit()
 {
   // Set terminal to non-blocking mode
   struct termios old_tio, new_tio;
@@ -40,112 +47,61 @@ DAQState GetKBInput()
   tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
   fcntl(STDIN_FILENO, F_SETFL, flags);
 
-  if (result > 0) {
-    if (input == 'q' || input == 'Q') {
-      return DAQState::Stopping;
-    } else {
-      return DAQState::Acquiring;
-    }
-  } else {
-    // No input available
-    return DAQState::Acquiring;
-  }
+  return (result > 0 && (input == 'q' || input == 'Q'));
 }
 
 int main(int argc, char* argv[])
 {
-  std::cout << "DELILA Data Source" << std::endl;
-  std::cout << "Press 'q' to quit" << std::endl;
+  std::cout << "=== DELILA2 Simple Digitizer Test ===" << std::endl;
+  std::cout << "Press 'q' to quit" << std::endl << std::endl;
 
   // Parse command line arguments
   std::string config_file = "PSD2.conf";
-  std::string bind_address = "tcp://*:5555";
-  bool enable_compression = false;
-  bool enable_checksum = false;
-
   if (argc > 1) {
     config_file = argv[1];
   }
-  if (argc > 2) {
-    bind_address = argv[2];
-  }
-  if (argc > 3 && std::string(argv[3]) == "--compress") {
-    enable_compression = true;
-  }
-  if (argc > 4 && std::string(argv[4]) == "--checksum") {
-    enable_checksum = true;
-  }
 
   std::cout << "Configuration file: " << config_file << std::endl;
-  std::cout << "Bind address: " << bind_address << std::endl;
-  std::cout << "Compression: " << (enable_compression ? "enabled" : "disabled") << std::endl;
-  std::cout << "Checksum: " << (enable_checksum ? "enabled" : "disabled") << std::endl;
 
   // Initialize digitizer
   auto digitizer = std::make_unique<Digitizer>();
   auto configManager = ConfigurationManager();
-  
+
   try {
+    std::cout << "Loading configuration..." << std::endl;
     configManager.LoadFromFile(config_file);
+
+    std::cout << "Initializing digitizer..." << std::endl;
     digitizer->Initialize(configManager);
+
+    std::cout << "Configuring digitizer..." << std::endl;
     digitizer->Configure();
+
+    std::cout << "Configuration complete!" << std::endl;
   } catch (const std::exception& e) {
     std::cerr << "Failed to initialize digitizer: " << e.what() << std::endl;
     return 1;
   }
 
-  // Configure network transport
-  ZMQTransport transport;
-  TransportConfig net_config;
-  net_config.data_address = bind_address;
-  net_config.data_pattern = "PUB";
-  net_config.bind_data = true;
-
-  // Disable status and command channels for now
-  net_config.status_address = net_config.data_address;
-  net_config.command_address = net_config.data_address;
-
-  if (!transport.Configure(net_config)) {
-    std::cerr << "Failed to configure transport" << std::endl;
-    return 1;
-  }
-
-  if (!transport.Connect()) {
-    std::cerr << "Failed to connect transport" << std::endl;
-    return 1;
-  }
-
-  // Configure data processor with optional features
-  DataProcessor processor;
-  if (enable_compression) {
-    processor.EnableCompression(true);
-    std::cout << "Compression enabled" << std::endl;
-  }
-  if (enable_checksum) {
-    processor.EnableChecksum(true);
-    std::cout << "Checksum enabled" << std::endl;
-  }
-
-  std::cout << "Transport connected, starting acquisition..." << std::endl;
-
   // Start data acquisition
+  std::cout << "\nStarting acquisition..." << std::endl;
   digitizer->StartAcquisition();
-  bool isAcquiring = true;
 
-  // Statistics
+  // Statistics counters
   auto startTime = std::chrono::steady_clock::now();
   uint64_t totalEvents = 0;
   uint64_t totalBatches = 0;
   uint64_t emptyBatches = 0;
-  uint64_t sequenceNumber = 0;
 
   auto lastStatsTime = startTime;
   uint64_t lastEventCount = 0;
 
+  // Main acquisition loop
+  bool isAcquiring = true;
   while (isAcquiring) {
-    // Check for keyboard input
-    auto state = GetKBInput();
-    if (state == DAQState::Stopping) {
+    // Check for quit command
+    if (CheckForQuit()) {
+      std::cout << "\nQuit requested..." << std::endl;
       break;
     }
 
@@ -156,11 +112,13 @@ int main(int argc, char* argv[])
       totalEvents += events->size();
       totalBatches++;
 
-      // Process and send via network using new API
-      auto data = processor.Process(events, sequenceNumber++);
-      if (data && !transport.SendBytes(data)) {
-        std::cerr << "Failed to send events" << std::endl;
-      }
+      // Display information about the last event in this batch
+      const auto& lastEvent = events->back();
+      std::cout << "Batch #" << totalBatches
+                << " | Events: " << events->size()
+                << " | Ch: " << static_cast<int>(lastEvent->channel)
+                << " | Timestamp: " << lastEvent->timeStampNs
+                << " ns" << std::endl;
     } else {
       emptyBatches++;
       // Small sleep to avoid busy waiting when no events
@@ -176,35 +134,43 @@ int main(int argc, char* argv[])
       uint64_t eventsInPeriod = totalEvents - lastEventCount;
       double rate = static_cast<double>(eventsInPeriod) / timeSinceStats;
 
-      std::cout << "Events: " << totalEvents
-                << " | Batches: " << totalBatches
-                << " | Rate: " << rate << " evt/s" << std::endl;
+      std::cout << "\n--- Statistics ---" << std::endl;
+      std::cout << "Total events: " << totalEvents << std::endl;
+      std::cout << "Event rate: " << std::fixed << std::setprecision(1)
+                << rate << " evt/s" << std::endl;
+      std::cout << "Total batches: " << totalBatches << std::endl;
+      std::cout << "------------------\n" << std::endl;
 
       lastStatsTime = currentTime;
       lastEventCount = totalEvents;
     }
   }
 
+  // Stop acquisition
   std::cout << "\nStopping acquisition..." << std::endl;
-  
-  // Stop and cleanup
   digitizer->StopAcquisition();
-  transport.Disconnect();
 
   // Final statistics
   auto endTime = std::chrono::steady_clock::now();
   std::chrono::duration<double> elapsedTime = endTime - startTime;
-  
+
   std::cout << "\n=== Final Statistics ===" << std::endl;
   std::cout << "Total events: " << totalEvents << std::endl;
   std::cout << "Total batches: " << totalBatches << std::endl;
   std::cout << "Empty batches: " << emptyBatches << std::endl;
-  std::cout << "Elapsed time: " << elapsedTime.count() << " seconds" << std::endl;
-  std::cout << "Average rate: " << totalEvents / elapsedTime.count() << " events/second" << std::endl;
-  
-  if (totalBatches > 0) {
-    std::cout << "Average batch size: " << totalEvents / totalBatches << " events/batch" << std::endl;
+  std::cout << "Elapsed time: " << std::fixed << std::setprecision(2)
+            << elapsedTime.count() << " seconds" << std::endl;
+
+  if (elapsedTime.count() > 0) {
+    std::cout << "Average rate: " << std::fixed << std::setprecision(1)
+              << totalEvents / elapsedTime.count() << " events/second" << std::endl;
   }
 
+  if (totalBatches > 0) {
+    std::cout << "Average batch size: " << std::fixed << std::setprecision(1)
+              << static_cast<double>(totalEvents) / totalBatches << " events/batch" << std::endl;
+  }
+
+  std::cout << "\nDone!" << std::endl;
   return 0;
 }
