@@ -24,7 +24,8 @@ EventData::EventData(size_t waveformSize)
       digitalProbe3Type(0),
       digitalProbe4Type(0),
       downSampleFactor(0),
-      flags(0)
+      flags(0),
+      aMax(0)
 {
   if (waveformSize > 0) {
     ResizeWaveform(waveformSize);
@@ -65,7 +66,8 @@ EventData::EventData(EventData &&other) noexcept
       digitalProbe3Type(other.digitalProbe3Type),
       digitalProbe4Type(other.digitalProbe4Type),
       downSampleFactor(other.downSampleFactor),
-      flags(other.flags)
+      flags(other.flags),
+      aMax(other.aMax)
 {
   // Reset other object
   other.timeStampNs = 0.0;
@@ -83,6 +85,7 @@ EventData::EventData(EventData &&other) noexcept
   other.digitalProbe4Type = 0;
   other.downSampleFactor = 0;
   other.flags = 0;
+  other.aMax = 0;
 }
 
 // Move assignment operator
@@ -111,6 +114,7 @@ EventData &EventData::operator=(EventData &&other) noexcept
     digitalProbe4Type = other.digitalProbe4Type;
     downSampleFactor = other.downSampleFactor;
     flags = other.flags;
+    aMax = other.aMax;
 
     // Reset other object
     other.timeStampNs = 0.0;
@@ -128,6 +132,7 @@ EventData &EventData::operator=(EventData &&other) noexcept
     other.digitalProbe4Type = 0;
     other.downSampleFactor = 0;
     other.flags = 0;
+    other.aMax = 0;
   }
   return *this;
 }
@@ -339,6 +344,7 @@ void EventData::CopyFrom(const EventData &other)
   digitalProbe4Type = other.digitalProbe4Type;
   downSampleFactor = other.downSampleFactor;
   flags = other.flags;
+  aMax = other.aMax;
 }
 
 }  // namespace Digitizer

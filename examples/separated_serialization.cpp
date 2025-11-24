@@ -64,20 +64,16 @@ void DemonstrateOldAPI() {
             return;
         }
         
-        // OLD WAY: Transport handles serialization internally
+        // OLD WAY (deprecated): Would have used internal serialization
+        // This approach is no longer supported in the new API
         auto events = CreateTestEvents(5);
-        
-        std::cout << "Using deprecated Send() method...\n";
-        bool sent = transport.Send(events);  // [[deprecated]] method
-        
-        if (sent) {
-            std::cout << "✓ Sent " << events->size() << " events using old API\n";
-            std::cout << "  NOTE: This creates an internal processor inside ZMQTransport\n";
-            std::cout << "  NOTE: Sequence number is managed by transport layer\n";
-            std::cout << "  NOTE: You have no control over serialization format\n";
-        } else {
-            std::cout << "✗ Failed to send events\n";
-        }
+
+        std::cout << "Old Send() method has been removed.\n";
+        std::cout << "The transport layer no longer handles serialization.\n";
+        std::cout << "You must now:\n";
+        std::cout << "  1. Serialize data using DataProcessor\n";
+        std::cout << "  2. Send bytes using transport.SendBytes()\n";
+        std::cout << "This gives you full control over the serialization format.\n";
         
         transport.Disconnect();
         

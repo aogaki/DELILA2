@@ -66,6 +66,9 @@ class EventData
   // NEW: Flags field for status information (dig1/dig2)
   uint64_t flags;
 
+  // AMax value for digitizer data
+  uint64_t aMax;
+
   // Flag bit definitions for PSD1/PSD2
   static constexpr uint64_t FLAG_PILEUP = 0x01;          // Pileup detected
   static constexpr uint64_t FLAG_TRIGGER_LOST = 0x02;    // Trigger lost
@@ -99,12 +102,13 @@ constexpr size_t DIGITALPROBE3TYPE_SIZE = sizeof(EventData::digitalProbe3Type);
 constexpr size_t DIGITALPROBE4TYPE_SIZE = sizeof(EventData::digitalProbe4Type);
 constexpr size_t DOWNSAMPLEFACTOR_SIZE = sizeof(EventData::downSampleFactor);
 constexpr size_t FLAGS_SIZE = sizeof(EventData::flags);
+constexpr size_t AMAX_SIZE = sizeof(EventData::aMax);
 constexpr size_t EVENTDATA_SIZE =
     TIMESTAMPNS_SIZE + WAVEFORMSIZE_SIZE + ENERGY_SIZE + ENERGYSHORT_SIZE +
     MODULE_SIZE + CHANNEL_SIZE + TIMERESOLUTION_SIZE + ANALOGPROBE1TYPE_SIZE +
     ANALOGPROBE2TYPE_SIZE + DIGITALPROBE1TYPE_SIZE + DIGITALPROBE2TYPE_SIZE +
     DIGITALPROBE3TYPE_SIZE + DIGITALPROBE4TYPE_SIZE + DOWNSAMPLEFACTOR_SIZE +
-    FLAGS_SIZE;
+    FLAGS_SIZE + AMAX_SIZE;
 
 // Modern type alias
 using EventData_t = EventData;

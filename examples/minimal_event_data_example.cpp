@@ -106,25 +106,25 @@ void SerializationExample() {
     // Create events
     auto events = CreateTestEvents(100, 2);
     
-    // Serialize with MinimalEventData format
-    DataProcessor processor(FORMAT_VERSION_MINIMAL_EVENTDATA);
-    
+    // Create DataProcessor with default settings
+    DataProcessor processor;
+
     auto start = std::chrono::high_resolution_clock::now();
     auto encoded = processor.Process(events, 12345);  // sequence number
     auto end = std::chrono::high_resolution_clock::now();
-    
+
     if (encoded) {
         auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        
+
         std::cout << "Serialized 100 events:\n";
         std::cout << "  Serialized size: " << encoded->size() << " bytes\n";
         std::cout << "  Time: " << duration.count() << " ns\n";
-        std::cout << "  Rate: " << (100 * 1000000000.0 / duration.count()) 
+        std::cout << "  Rate: " << (100 * 1000000000.0 / duration.count())
                   << " events/second\n";
-        
+
         // Deserialize
         start = std::chrono::high_resolution_clock::now();
-        auto [decoded_events, sequence] = processor.DecodeMinimalEventData(*encoded);
+        auto [decoded_events, sequence] = processor.DecodeMinimal(encoded);
         end = std::chrono::high_resolution_clock::now();
         
         duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -139,10 +139,10 @@ void SerializationExample() {
     }
 }
 
-// Example 4: Network transport simulation (OLD API - Deprecated)
-void NetworkTransportExample_OldAPI() {
-    std::cout << "\n=== Network Transport Example (OLD API - Deprecated) ===\n";
-    
+// Example 4: Network transport simulation (Using Byte Transport)
+void NetworkTransportExample_ByteTransport() {
+    std::cout << "\n=== Network Transport Example (Byte Transport) ===\n";
+
     try {
         // Setup publisher
         ZMQTransport publisher;
@@ -150,62 +150,60 @@ void NetworkTransportExample_OldAPI() {
         pub_config.data_address = "tcp://*:15560";
         pub_config.data_pattern = "PUSH";
         pub_config.bind_data = true;
-        
+
         if (!publisher.Configure(pub_config) || !publisher.Connect()) {
             std::cerr << "Failed to setup publisher\n";
             return;
         }
-        
+
         // Setup subscriber
         ZMQTransport subscriber;
         TransportConfig sub_config;
         sub_config.data_address = "tcp://localhost:15560";
         sub_config.data_pattern = "PULL";
         sub_config.bind_data = false;
-        
+
         if (!subscriber.Configure(sub_config) || !subscriber.Connect()) {
             std::cerr << "Failed to setup subscriber\n";
             return;
         }
-        
+
         // Allow connection to establish
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        
-        // Send events (OLD API - uses internal serialization)
+
+        // Create and serialize events
         auto events = CreateTestEvents(1000, 3);
-        std::cout << "Sending 1000 MinimalEventData events (OLD API)...\n";
-        std::cout << "WARNING: Using deprecated SendMinimal method\n";
-        
-        if (publisher.SendMinimal(events)) {
-            std::cout << "Events sent successfully\n";
-            
-            // Check data type
-            auto data_type = subscriber.PeekDataType();
-            if (data_type == ZMQTransport::DataType::MINIMAL_EVENTDATA) {
-                std::cout << "Detected MinimalEventData format\n";
-                
-                // Receive events (OLD API - uses internal deserialization)
-                std::cout << "WARNING: Using deprecated ReceiveMinimal method\n";
-                auto [received_events, seq] = subscriber.ReceiveMinimal();
+        std::cout << "Sending 1000 MinimalEventData events...\n";
+
+        DataProcessor processor;
+        auto serialized = processor.Process(events, 12345);
+
+        if (serialized && publisher.SendBytes(serialized)) {
+            std::cout << "Events sent successfully (" << serialized->size() << " bytes)\n";
+
+            // Receive and deserialize
+            auto received_bytes = subscriber.ReceiveBytes();
+            if (received_bytes) {
+                auto [received_events, seq] = processor.DecodeMinimal(received_bytes);
                 if (received_events) {
                     std::cout << "Received " << received_events->size() << " events\n";
                     std::cout << "Sequence number: " << seq << "\n";
-                    
+
                     // Verify first event
                     if (!received_events->empty()) {
                         const auto& first = (*received_events)[0];
-                        std::cout << "First event - Module: " 
-                                  << static_cast<int>(first->module) 
-                                  << ", Channel: " 
+                        std::cout << "First event - Module: "
+                                  << static_cast<int>(first->module)
+                                  << ", Channel: "
                                   << static_cast<int>(first->channel) << "\n";
                     }
                 }
             }
         }
-        
+
         publisher.Disconnect();
         subscriber.Disconnect();
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Transport error: " << e.what() << "\n";
     }
@@ -302,15 +300,13 @@ void NetworkTransportExample_NewAPI() {
 // Example 5: Format detection and mixed streams
 void FormatDetectionExample() {
     std::cout << "\n=== Format Detection Example ===\n";
-    
+
     // This demonstrates how to handle mixed EventData and MinimalEventData streams
     std::cout << "Format detection allows automatic handling of different data types\n";
-    std::cout << "Use transport.PeekDataType() to check format before receiving\n";
-    std::cout << "Use transport.ReceiveAny() for automatic format handling\n";
-    
-    // In a real application:
-    // auto [data, seq] = transport.ReceiveAny();
-    // std::visit([](auto&& events) { /* handle events */ }, data);
+    std::cout << "The DataProcessor can handle both EventData and MinimalEventData\n";
+    std::cout << "Use processor.DecodeMinimal() for MinimalEventData\n";
+    std::cout << "Use processor.Decode() for regular EventData\n";
+    std::cout << "Check the binary header's format_version field to determine type\n";
 }
 
 // Performance benchmark
@@ -335,7 +331,7 @@ void PerformanceBenchmark() {
         total_creation_time += std::chrono::duration<double>(end - start).count();
         
         // Measure serialization time
-        DataProcessor processor(FORMAT_VERSION_MINIMAL_EVENTDATA);
+        DataProcessor processor;
         start = std::chrono::high_resolution_clock::now();
         auto encoded = processor.Process(events, i);
         end = std::chrono::high_resolution_clock::now();
@@ -358,20 +354,19 @@ void PerformanceBenchmark() {
 int main(int argc, char* argv[]) {
     std::cout << "DELILA2 MinimalEventData Examples\n";
     std::cout << "==================================\n";
-    
+
     // Run examples
     BasicUsageExample();
     BatchProcessingExample();
     SerializationExample();
-    
-    // Transport examples - both old and new API
-    NetworkTransportExample_OldAPI();
+
+    // Transport examples
+    NetworkTransportExample_ByteTransport();
     NetworkTransportExample_NewAPI();
-    
+
     FormatDetectionExample();
     PerformanceBenchmark();
-    
+
     std::cout << "\n=== Examples Complete ===\n";
-    std::cout << "Note: Use NEW API for new code. OLD API is deprecated.\n";
     return 0;
 }

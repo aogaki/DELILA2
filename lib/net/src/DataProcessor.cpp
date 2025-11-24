@@ -390,6 +390,7 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Serialize(
     appendBytes(&event->digitalProbe4Type, sizeof(event->digitalProbe4Type));
     appendBytes(&event->downSampleFactor, sizeof(event->downSampleFactor));
     appendBytes(&event->flags, sizeof(event->flags));
+    appendBytes(&event->aMax, sizeof(event->aMax));
 
     // Write variable-size waveform data
     // Analog probe 1
@@ -513,6 +514,7 @@ DataProcessor::Deserialize(const std::unique_ptr<std::vector<uint8_t>> &data)
     if (!readBytes(&event->downSampleFactor, sizeof(event->downSampleFactor)))
       break;
     if (!readBytes(&event->flags, sizeof(event->flags))) break;
+    if (!readBytes(&event->aMax, sizeof(event->aMax))) break;
 
     // Read variable-size waveform data
     uint32_t size;

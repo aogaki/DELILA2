@@ -32,11 +32,12 @@ enum class FirmwareType {
   PSD2,    ///< Pulse Shape Discrimination v2
   PHA1,    ///< Pulse Height Analysis v1
   PHA2,    ///< Pulse Height Analysis v2
+  AMAX,    ///< AMax (DELILA custom firmware)
   QDC1,    ///< Charge-to-Digital Converter v1
   SCOPE1,  ///< Oscilloscope mode v1
   SCOPE2,  ///< Oscilloscope mode v2
   UNKNOWN  ///< Unknown or unsupported firmware
-};
+};;
 
 /**
  * @brief Abstract interface for all digitizer implementations

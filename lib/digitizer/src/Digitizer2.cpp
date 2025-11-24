@@ -11,6 +11,8 @@
 #include <iterator>
 #include <thread>
 
+#include "AMaxConstants.hpp"
+#include "AMaxDecoder.hpp"
 #include "PSD2Decoder.hpp"
 
 namespace DELILA
@@ -109,9 +111,16 @@ bool Digitizer2::Configure()
     return false;
   }
 
-  // Configure record length
-  if (!ConfigureRecordLength()) {
-    return false;
+  // Configure record length (skip for AMax - uses registers instead)
+  if (fFirmwareType != FirmwareType::AMAX) {
+    if (!ConfigureRecordLength()) {
+      return false;
+    }
+  } else {
+    // For AMax, set a default record length since it's managed via registers
+    fRecordLength = 1000;  // Default value
+    std::cout << "AMax firmware: skipping standard record length configuration"
+              << std::endl;
   }
 
   // Configure endpoints for data readout
@@ -145,6 +154,12 @@ bool Digitizer2::ResetDigitizer() { return SendCommand("/cmd/Reset"); }
 
 bool Digitizer2::ApplyConfiguration()
 {
+  // Route to AMax-specific configuration for AMAX firmware
+  if (fFirmwareType == FirmwareType::AMAX) {
+    return ConfigureAMax();
+  }
+
+  // Standard configuration for other firmware types
   bool status = true;
   for (const auto &config : fConfig) {
     // Only use parameters that start with '/' (CAEN digitizer paths)
@@ -194,6 +209,9 @@ bool Digitizer2::InitializeDataConverter()
     if (fFirmwareType == FirmwareType::PSD2) {
       fDecoder = std::make_unique<PSD2Decoder>(fNThreads);
       std::cout << "Created PSD2Decoder" << std::endl;
+    } else if (fFirmwareType == FirmwareType::AMAX) {
+      fDecoder = std::make_unique<AMaxDecoder>(fNThreads);
+      std::cout << "Created AMaxDecoder (stub mode)" << std::endl;
     } else if (fFirmwareType == FirmwareType::PHA2) {
       std::cerr << "Error: PHA2Decoder not yet implemented" << std::endl;
       std::cerr << "Please implement PHA2Decoder class for PHA firmware support"
@@ -201,8 +219,9 @@ bool Digitizer2::InitializeDataConverter()
       return false;
     } else if (fFirmwareType == FirmwareType::SCOPE2) {
       std::cerr << "Error: SCOPE2Decoder not yet implemented" << std::endl;
-      std::cerr << "Please implement SCOPE2Decoder class for SCOPE firmware support"
-                << std::endl;
+      std::cerr
+          << "Please implement SCOPE2Decoder class for SCOPE firmware support"
+          << std::endl;
       return false;
     } else {
       std::cerr << "Error: Unsupported firmware type for Digitizer2: "
@@ -267,7 +286,7 @@ bool Digitizer2::StartAcquisition()
                  "command"
               << std::endl;
     // Short sleep to allow other digitizers to prepare
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     std::cout << "Sending software start command" << std::endl;
     status &= SendCommand("/cmd/SwStartAcquisition");
   } else {
@@ -335,9 +354,8 @@ std::unique_ptr<std::vector<std::unique_ptr<EventData>>>
 Digitizer2::GetEventData()
 {
   // Get EventData directly from Decoder
-  return fDecoder
-             ? fDecoder->GetEventData()
-             : std::make_unique<std::vector<std::unique_ptr<EventData>>>();
+  return fDecoder ? fDecoder->GetEventData()
+                  : std::make_unique<std::vector<std::unique_ptr<EventData>>>();
 }
 
 // ============================================================================
@@ -636,6 +654,10 @@ void Digitizer2::DetermineFirmwareType()
     }
   } else if (fwType.find("qdc") != std::string::npos) {
     fFirmwareType = FirmwareType::QDC1;
+  } else if (fwType.find("amax") != std::string::npos ||
+             fwType.find("dpp_open") != std::string::npos) {
+    // AMax (DELILA custom firmware)
+    fFirmwareType = FirmwareType::AMAX;
   } else if (fwType.find("scope") != std::string::npos ||
              fwType.find("oscilloscope") != std::string::npos) {
     // Similar logic for SCOPE
@@ -756,6 +778,9 @@ void Digitizer2::PrintDeviceInfo()
     case FirmwareType::PHA2:
       typeStr = "PHA2";
       break;
+    case FirmwareType::AMAX:
+      typeStr = "AMAX";
+      break;
     case FirmwareType::QDC1:
       typeStr = "QDC1";
       break;
@@ -772,6 +797,161 @@ void Digitizer2::PrintDeviceInfo()
   std::cout << "Digitizer Type: " << typeStr << std::endl;
 
   std::cout << "=========================" << std::endl;
+}
+
+// ============================================================================
+// AMax-specific Configuration Methods
+// ============================================================================
+
+bool Digitizer2::ConfigureAMax()
+{
+  std::cout << "Configuring AMax (DELILA custom) firmware..." << std::endl;
+
+  bool overallStatus = true;
+
+  // Apply all configuration parameters
+  for (const auto &config : fConfig) {
+    // Skip empty parameters
+    if (config[0].empty()) {
+      continue;
+    }
+
+    // Only use parameters that start with '/' (CAEN digitizer paths)
+    // This filters out non-digitizer parameters like ModID, Threads, URL
+    if (config[0][0] != '/') {
+      continue;
+    }
+
+    // Apply parameter (handles both /reg/ and /par/ paths)
+    if (!ApplyAMaxParameter(config[0], config[1])) {
+      std::cerr << "Failed to apply: " << config[0] << " = " << config[1]
+                << std::endl;
+      overallStatus = false;
+      // Continue applying other parameters
+    }
+  }
+
+  if (overallStatus) {
+    std::cout << "AMax configuration complete" << std::endl;
+  } else {
+    std::cerr << "AMax configuration completed with some errors" << std::endl;
+  }
+
+  return overallStatus;
+}
+
+bool Digitizer2::ApplyAMaxParameter(const std::string &path,
+                                    const std::string &value)
+{
+  try {
+    if (IsRegisterPath(path)) {
+      // Register access via CAEN_FELib_SetUserRegister
+      uint32_t address = ParseRegisterAddress(path);
+      uint32_t regValue = std::stoul(value, nullptr, 0);
+
+      if (fDebugFlag) {
+        std::cout << "Setting register 0x" << std::hex << address << " = 0x"
+                  << regValue << std::dec << " (" << regValue << ")"
+                  << std::endl;
+      }
+
+      // Call SetUserRegister (assuming it exists in CAEN_FELib)
+      // Note: This assumes CAEN_FELib_SetUserRegister is available
+      // If not, we would need to use a different approach
+
+      // For now, we'll use the raw register write approach
+      // Format: "/reg/0xADDRESS" -> write to user register
+      std::string regPath = "/board/userreg/" + std::to_string(address);
+      int ret = CAEN_FELib_SetValue(fHandle, regPath.c_str(), value.c_str());
+
+      if (ret != CAEN_FELib_Success) {
+        std::cerr << "SetUserRegister failed for address 0x" << std::hex
+                  << address << std::dec << " with error code: " << ret
+                  << std::endl;
+        return false;
+      }
+
+      return true;
+    } else {
+      // Standard parameter access via CAEN_FELib_SetValue
+      if (fDebugFlag) {
+        std::cout << "Setting parameter " << path << " = " << value
+                  << std::endl;
+      }
+
+      int ret = CAEN_FELib_SetValue(fHandle, path.c_str(), value.c_str());
+
+      if (ret != CAEN_FELib_Success) {
+        std::cerr << "SetValue failed for " << path
+                  << " with error code: " << ret << std::endl;
+        return false;
+      }
+
+      return true;
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "Error applying AMax parameter " << path << ": " << e.what()
+              << std::endl;
+    return false;
+  }
+}
+
+bool Digitizer2::IsRegisterPath(const std::string &path) const
+{
+  // Check if path indicates a register access
+  // 1. Path starts with "/reg/"
+  // 2. Path starts with "0x" (direct hex address)
+
+  if (path.find("/reg/") == 0) {
+    return true;
+  }
+
+  if (path.find("0x") == 0 || path.find("0X") == 0) {
+    return true;
+  }
+
+  return false;
+}
+
+uint32_t Digitizer2::ParseRegisterAddress(const std::string &path) const
+{
+  // Parse register address from various formats:
+  // 1. Direct hex: "0x1234"
+  // 2. Register path with hex: "/reg/0x1234"
+  // 3. Named register: "/reg/hooold"
+
+  // Direct hex address
+  if (path.find("0x") == 0 || path.find("0X") == 0) {
+    return std::stoul(path, nullptr, 0);
+  }
+
+  // Register path with hex address
+  if (path.find("/reg/0x") == 0) {
+    return std::stoul(path.substr(5), nullptr, 0);
+  }
+
+  if (path.find("/reg/0X") == 0) {
+    return std::stoul(path.substr(5), nullptr, 0);
+  }
+
+  // Named register
+  if (path.find("/reg/") == 0) {
+    std::string regName = path.substr(5);
+
+    try {
+      // Try to find in register map
+      return AMaxConstants::GetRegisterAddress(regName);
+    } catch (const std::exception &e) {
+      // If not found in map, try to parse as decimal
+      try {
+        return std::stoul(regName, nullptr, 10);
+      } catch (...) {
+        throw std::runtime_error("Unknown register name: " + regName);
+      }
+    }
+  }
+
+  throw std::runtime_error("Invalid register path format: " + path);
 }
 
 }  // namespace Digitizer

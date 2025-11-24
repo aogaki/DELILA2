@@ -111,6 +111,12 @@ class Digitizer2 : public IDigitizer
   void ReadDataThread();
   int ReadDataWithLock(std::unique_ptr<RawData_t> &rawData, int timeOut);
 
+  // === AMax-specific Configuration ===
+  bool ConfigureAMax();
+  bool ApplyAMaxParameter(const std::string &path, const std::string &value);
+  bool IsRegisterPath(const std::string &path) const;
+  uint32_t ParseRegisterAddress(const std::string &path) const;
+
   // === Note: All data is automatically converted to EventData ===
 };
 

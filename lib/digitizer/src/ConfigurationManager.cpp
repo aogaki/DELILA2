@@ -98,21 +98,33 @@ void ConfigurationManager::Clear()
 
 std::string ConfigurationManager::GetParameter(const std::string &key) const
 {
-  auto it = parameters_.find(key);
+  // Convert key to lowercase for case-insensitive lookup
+  std::string lowerKey = key;
+  std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+  auto it = parameters_.find(lowerKey);
   return (it != parameters_.end()) ? it->second : "";
 }
 
 std::optional<std::string> ConfigurationManager::GetParameterOptional(
     const std::string &key) const
 {
-  auto it = parameters_.find(key);
+  // Convert key to lowercase for case-insensitive lookup
+  std::string lowerKey = key;
+  std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+  auto it = parameters_.find(lowerKey);
   return (it != parameters_.end()) ? std::make_optional(it->second)
                                    : std::nullopt;
 }
 
 bool ConfigurationManager::HasParameter(const std::string &key) const
 {
-  return parameters_.find(key) != parameters_.end();
+  // Convert key to lowercase for case-insensitive lookup
+  std::string lowerKey = key;
+  std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+  return parameters_.find(lowerKey) != parameters_.end();
 }
 
 std::optional<int> ConfigurationManager::GetParameterAsInt(
@@ -173,7 +185,11 @@ std::optional<bool> ConfigurationManager::GetParameterAsBool(
 void ConfigurationManager::SetParameter(const std::string &key,
                                         const std::string &value)
 {
-  parameters_[key] = value;
+  // Convert key to lowercase for case-insensitive storage
+  std::string lowerKey = key;
+  std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+  parameters_[lowerKey] = value;
 }
 
 // ============================================================================
@@ -302,7 +318,11 @@ ConfigurationManager::LoadResult ConfigurationManager::ParseLine(
     return LoadResult::ParseError;
   }
 
-  parameters_[key] = value;
+  // Convert key to lowercase for case-insensitive storage
+  std::string lowerKey = key;
+  std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+
+  parameters_[lowerKey] = value;
   return LoadResult::Success;
 }
 
