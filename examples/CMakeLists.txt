@@ -58,32 +58,7 @@ find_library(CAEN_FELIB CAEN_FELib)
 # BASIC EXAMPLES
 # ============================================================================
 
-# Example 1: Basic library usage
-add_executable(basic_example basic_example.cpp)
-target_link_libraries(basic_example
-    PRIVATE
-        ${DELILA_TARGET}
-        ${ZMQ_LIBRARIES}
-)
-target_include_directories(basic_example
-    PRIVATE
-        ${ZMQ_INCLUDE_DIRS}
-)
-
-# Example 2: Data + Command communication with new byte-based interface
-# TEMPORARILY DISABLED - needs update for new API
-# add_executable(data_command_example data_command_example.cpp)
-# target_link_libraries(data_command_example
-#     PRIVATE
-#         ${DELILA_TARGET}
-#         ${ZMQ_LIBRARIES}
-# )
-# target_include_directories(data_command_example
-#     PRIVATE
-#         ${ZMQ_INCLUDE_DIRS}
-# )
-
-# Example 3: Separated serialization demonstration
+# Example 1: Separated serialization demonstration (no CAEN dependency)
 add_executable(separated_serialization separated_serialization.cpp)
 target_link_libraries(separated_serialization
     PRIVATE
@@ -95,7 +70,7 @@ target_include_directories(separated_serialization
         ${ZMQ_INCLUDE_DIRS}
 )
 
-# Example 4: MinimalEventData usage
+# Example 2: MinimalEventData usage (no CAEN dependency)
 add_executable(minimal_event_data_example minimal_event_data_example.cpp)
 target_link_libraries(minimal_event_data_example
     PRIVATE
@@ -107,29 +82,50 @@ target_include_directories(minimal_event_data_example
         ${ZMQ_INCLUDE_DIRS}
 )
 
-# Example 5: Simple digitizer test (requires CAEN hardware)
-add_executable(simple_digitizer_test simple_digitizer_test.cpp)
-target_link_libraries(simple_digitizer_test
-    PRIVATE
-        ${DELILA_TARGET}
-        ${ZMQ_LIBRARIES}
-)
-target_include_directories(simple_digitizer_test
-    PRIVATE
-        ${ZMQ_INCLUDE_DIRS}
-)
+# ============================================================================
+# CAEN FELib DEPENDENT EXAMPLES
+# ============================================================================
+if(CAEN_FELIB)
+    message(STATUS "CAEN FELib found - building digitizer examples")
 
-# Example 6: Digitizer2 basic example (requires CAEN Digitizer 2 hardware)
-add_executable(digitizer2_basic_example digitizer2_basic_example.cpp)
-target_link_libraries(digitizer2_basic_example
-    PRIVATE
-        ${DELILA_TARGET}
-        ${ZMQ_LIBRARIES}
-)
-target_include_directories(digitizer2_basic_example
-    PRIVATE
-        ${ZMQ_INCLUDE_DIRS}
-)
+    # Basic library usage (requires Digitizer class)
+    add_executable(basic_example basic_example.cpp)
+    target_link_libraries(basic_example
+        PRIVATE
+            ${DELILA_TARGET}
+            ${ZMQ_LIBRARIES}
+    )
+    target_include_directories(basic_example
+        PRIVATE
+            ${ZMQ_INCLUDE_DIRS}
+    )
+
+    # Simple digitizer test (requires CAEN hardware)
+    add_executable(simple_digitizer_test simple_digitizer_test.cpp)
+    target_link_libraries(simple_digitizer_test
+        PRIVATE
+            ${DELILA_TARGET}
+            ${ZMQ_LIBRARIES}
+    )
+    target_include_directories(simple_digitizer_test
+        PRIVATE
+            ${ZMQ_INCLUDE_DIRS}
+    )
+
+    # Digitizer2 basic example (requires CAEN Digitizer 2 hardware)
+    add_executable(digitizer2_basic_example digitizer2_basic_example.cpp)
+    target_link_libraries(digitizer2_basic_example
+        PRIVATE
+            ${DELILA_TARGET}
+            ${ZMQ_LIBRARIES}
+    )
+    target_include_directories(digitizer2_basic_example
+        PRIVATE
+            ${ZMQ_INCLUDE_DIRS}
+    )
+else()
+    message(STATUS "CAEN FELib not found - skipping digitizer examples")
+endif()
 
 # ============================================================================
 # INSTALLATION
@@ -138,14 +134,20 @@ target_include_directories(digitizer2_basic_example
 # Install examples source code
 install(FILES
     CMakeLists.txt
-    basic_example.cpp
-    # data_command_example.cpp  # Temporarily disabled
     separated_serialization.cpp
     minimal_event_data_example.cpp
-    simple_digitizer_test.cpp
-    digitizer2_basic_example.cpp
     DESTINATION share/delila2/examples
 )
+
+# Install CAEN-dependent examples source if available
+if(CAEN_FELIB)
+    install(FILES
+        basic_example.cpp
+        simple_digitizer_test.cpp
+        digitizer2_basic_example.cpp
+        DESTINATION share/delila2/examples
+    )
+endif()
 
 # Install README if it exists
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/README.md)
@@ -154,14 +156,19 @@ endif()
 
 # Install built examples
 install(TARGETS
-    basic_example
-    # data_command_example  # Temporarily disabled
     separated_serialization
     minimal_event_data_example
-    simple_digitizer_test
-    digitizer2_basic_example
     DESTINATION bin
 )
+
+if(CAEN_FELIB)
+    install(TARGETS
+        basic_example
+        simple_digitizer_test
+        digitizer2_basic_example
+        DESTINATION bin
+    )
+endif()
 
 # ============================================================================
 # BUILD INSTRUCTIONS

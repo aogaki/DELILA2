@@ -98,7 +98,14 @@ endif()
 # add_subdirectory(lib/net)
 
 # Collect all source files from lib subdirectories, excluding duplicates
-file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
+# Only include digitizer sources if CAEN FELib is available
+if(CAEN_FELIB)
+    file(GLOB_RECURSE DIGITIZER_SOURCES "lib/digitizer/src/*.cpp")
+    message(STATUS "CAEN FELib found - digitizer functionality enabled")
+else()
+    set(DIGITIZER_SOURCES "")
+    message(STATUS "CAEN FELib not found - digitizer functionality disabled")
+endif()
 
 # Add network sources only if ZMQ is available
 if(ZMQ_FOUND)
