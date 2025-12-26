@@ -85,7 +85,7 @@ aogaki
 *.xz
 *.bz2
 
-TODO
+# TODO
 build*
 
 # Documentation generated files
