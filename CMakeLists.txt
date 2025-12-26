@@ -196,9 +196,6 @@ if(BUILD_DOCUMENTATION OR CMAKE_BUILD_TYPE MATCHES "Release")
     add_subdirectory(docs)
 endif()
 
-# Add examples
-add_subdirectory(examples)
-
 # Install configuration
 install(TARGETS DELILA
     EXPORT DELILA2Targets
