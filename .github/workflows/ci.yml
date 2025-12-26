@@ -39,6 +39,7 @@ jobs:
           pkg-config \
           libzmq3-dev \
           libgtest-dev \
+          libgmock-dev \
           libbenchmark-dev \
           nlohmann-json3-dev
 
@@ -158,6 +159,7 @@ jobs:
           pkg-config \
           libzmq3-dev \
           libgtest-dev \
+          libgmock-dev \
           nlohmann-json3-dev \
           clang
 
@@ -200,6 +202,7 @@ jobs:
           pkg-config \
           libzmq3-dev \
           libgtest-dev \
+          libgmock-dev \
           nlohmann-json3-dev \
           clang
 
@@ -242,6 +245,7 @@ jobs:
           pkg-config \
           libzmq3-dev \
           libgtest-dev \
+          libgmock-dev \
           nlohmann-json3-dev \
           clang
 

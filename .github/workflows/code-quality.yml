@@ -79,6 +79,7 @@ jobs:
           clang-tidy-14 \
           libzmq3-dev \
           libgtest-dev \
+          libgmock-dev \
           nlohmann-json3-dev
 
     - name: Configure CMake

@@ -8,22 +8,30 @@ find_package(benchmark QUIET)
 # Only add tests if GoogleTest is found
 if(GTest_FOUND)
     # Collect test source files
-    file(GLOB_RECURSE UNIT_TEST_SOURCES 
+    file(GLOB_RECURSE UNIT_TEST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/unit/*.cpp"
     )
-    
-    file(GLOB_RECURSE INTEGRATION_TEST_SOURCES 
+
+    file(GLOB_RECURSE INTEGRATION_TEST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/*.cpp"
     )
 
     # Unit tests (if source files exist)
     if(UNIT_TEST_SOURCES)
         add_executable(delila_unit_tests ${UNIT_TEST_SOURCES})
-        target_link_libraries(delila_unit_tests
-            DELILA
-            GTest::gtest_main
-            GTest::gmock
-        )
+        # Check if GMock is available
+        if(TARGET GTest::gmock)
+            target_link_libraries(delila_unit_tests
+                DELILA
+                GTest::gtest_main
+                GTest::gmock
+            )
+        else()
+            target_link_libraries(delila_unit_tests
+                DELILA
+                GTest::gtest_main
+            )
+        endif()
         add_test(NAME UnitTests COMMAND delila_unit_tests)
     endif()
 
