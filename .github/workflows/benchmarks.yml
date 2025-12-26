@@ -1,0 +1,158 @@
+# DELILA2 Performance Benchmarks
+# Runs performance benchmarks and reports results
+
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  # ===========================================
+  # Run Performance Benchmarks
+  # ===========================================
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          libbenchmark-dev \
+          nlohmann-json3-dev
+
+    - name: Configure CMake (Release)
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_FLAGS="-O3 -march=native"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Benchmarks
+      working-directory: build
+      run: |
+        echo "=== Running Performance Benchmarks ==="
+
+        # Find and run all benchmark executables
+        find . -name "bench_*" -type f -executable | while read bench; do
+          echo ""
+          echo "Running: $bench"
+          echo "----------------------------------------"
+          timeout 300 "$bench" --benchmark_format=console --benchmark_repetitions=3 || true
+        done
+
+    - name: Performance Summary
+      working-directory: build
+      run: |
+        echo ""
+        echo "=== Performance Test Summary ==="
+        echo "Benchmarks completed. Check the logs above for detailed results."
+
+  # ===========================================
+  # Compile Time Benchmark
+  # ===========================================
+  compile-time:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev \
+          time
+
+    - name: Measure Clean Build Time
+      run: |
+        echo "=== Clean Build Time (Debug) ==="
+        rm -rf build
+        /usr/bin/time -v cmake -B build -DCMAKE_BUILD_TYPE=Debug 2>&1 | grep -E "wall clock|Maximum resident"
+        /usr/bin/time -v cmake --build build --parallel $(nproc) 2>&1 | grep -E "wall clock|Maximum resident"
+
+    - name: Measure Incremental Build Time
+      run: |
+        echo "=== Incremental Build Time ==="
+        # Touch a source file to trigger rebuild
+        touch lib/net/src/ZMQTransport.cpp
+        /usr/bin/time -v cmake --build build --parallel $(nproc) 2>&1 | grep -E "wall clock|Maximum resident"
+
+    - name: Measure Release Build Time
+      run: |
+        echo "=== Clean Build Time (Release) ==="
+        rm -rf build
+        /usr/bin/time -v cmake -B build -DCMAKE_BUILD_TYPE=Release 2>&1 | grep -E "wall clock|Maximum resident"
+        /usr/bin/time -v cmake --build build --parallel $(nproc) 2>&1 | grep -E "wall clock|Maximum resident"
+
+  # ===========================================
+  # Binary Size Check
+  # ===========================================
+  binary-size:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev
+
+    - name: Build Release
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --parallel $(nproc)
+
+    - name: Report Binary Sizes
+      run: |
+        echo "=== Library Sizes ==="
+        find build -name "*.a" -o -name "*.so" 2>/dev/null | while read lib; do
+          size=$(stat --printf="%s" "$lib" 2>/dev/null || echo "0")
+          size_kb=$((size / 1024))
+          echo "$lib: ${size_kb} KB"
+        done
+
+        echo ""
+        echo "=== Executable Sizes ==="
+        find build -type f -executable ! -name "*.so" ! -name "*.a" 2>/dev/null | while read exe; do
+          if file "$exe" | grep -q "ELF"; then
+            size=$(stat --printf="%s" "$exe" 2>/dev/null || echo "0")
+            size_kb=$((size / 1024))
+            echo "$exe: ${size_kb} KB"
+          fi
+        done

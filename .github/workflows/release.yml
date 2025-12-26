@@ -1,0 +1,124 @@
+# DELILA2 Release Workflow
+# Creates releases when tags are pushed
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ===========================================
+  # Create Release Artifacts
+  # ===========================================
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          nlohmann-json3-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr/local
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Create source tarball
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        git archive --format=tar.gz --prefix=DELILA2-${VERSION}/ HEAD > DELILA2-${VERSION}-source.tar.gz
+
+    - name: Create build artifact
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        mkdir -p artifact/lib artifact/include artifact/bin
+
+        # Copy libraries
+        find build -name "*.a" -exec cp {} artifact/lib/ \; 2>/dev/null || true
+        find build -name "*.so" -exec cp {} artifact/lib/ \; 2>/dev/null || true
+
+        # Copy headers
+        cp -r lib/*/include/* artifact/include/ 2>/dev/null || true
+
+        # Copy executables (examples)
+        find build -maxdepth 1 -type f -executable -exec cp {} artifact/bin/ \; 2>/dev/null || true
+
+        # Create tarball
+        tar -czvf DELILA2-${VERSION}-linux-x64.tar.gz -C artifact .
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          DELILA2-*-source.tar.gz
+          DELILA2-*-linux-x64.tar.gz
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ===========================================
+  # Build for macOS
+  # ===========================================
+  release-macos:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        brew install \
+          cmake \
+          pkg-config \
+          zeromq \
+          nlohmann-json
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+    - name: Create build artifact
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        mkdir -p artifact/lib artifact/include artifact/bin
+
+        # Copy libraries
+        find build -name "*.a" -exec cp {} artifact/lib/ \; 2>/dev/null || true
+        find build -name "*.dylib" -exec cp {} artifact/lib/ \; 2>/dev/null || true
+
+        # Copy headers
+        cp -r lib/*/include/* artifact/include/ 2>/dev/null || true
+
+        # Create tarball
+        tar -czvf DELILA2-${VERSION}-macos.tar.gz -C artifact .
+
+    - name: Upload macOS artifact
+      uses: softprops/action-gh-release@v1
+      with:
+        files: DELILA2-*-macos.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

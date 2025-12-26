@@ -1,0 +1,264 @@
+# DELILA2 Continuous Integration Workflow
+# Runs on push to main and all pull requests
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ===========================================
+  # Build and Test on Ubuntu
+  # ===========================================
+  build-ubuntu:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          libbenchmark-dev \
+          nlohmann-json3-dev
+
+    - name: Set up Clang
+      if: matrix.compiler == 'clang'
+      run: |
+        sudo apt-get install -y clang
+        echo "CC=clang" >> $GITHUB_ENV
+        echo "CXX=clang++" >> $GITHUB_ENV
+
+    - name: Set up GCC
+      if: matrix.compiler == 'gcc'
+      run: |
+        echo "CC=gcc" >> $GITHUB_ENV
+        echo "CXX=g++" >> $GITHUB_ENV
+
+    - name: Cache CMake build
+      uses: actions/cache@v4
+      with:
+        path: build
+        key: ${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ hashFiles('**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.build_type }}-
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Unit Tests
+      working-directory: build
+      run: ctest --output-on-failure --test-dir . -L UnitTests || ctest --output-on-failure
+
+    - name: Run Integration Tests
+      working-directory: build
+      run: |
+        if ctest -N | grep -q IntegrationTests; then
+          ctest --output-on-failure -L IntegrationTests
+        fi
+
+  # ===========================================
+  # Build and Test on macOS
+  # ===========================================
+  build-macos:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        brew install \
+          cmake \
+          pkg-config \
+          zeromq \
+          googletest \
+          google-benchmark \
+          nlohmann-json
+
+    - name: Cache CMake build
+      uses: actions/cache@v4
+      with:
+        path: build
+        key: ${{ runner.os }}-${{ matrix.build_type }}-${{ hashFiles('**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.build_type }}-
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Build
+      run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+    - name: Run Unit Tests
+      working-directory: build
+      run: ctest --output-on-failure --test-dir . -L UnitTests || ctest --output-on-failure
+
+    - name: Run Integration Tests
+      working-directory: build
+      run: |
+        if ctest -N | grep -q IntegrationTests; then
+          ctest --output-on-failure -L IntegrationTests
+        fi
+
+  # ===========================================
+  # Memory Safety Check with AddressSanitizer
+  # ===========================================
+  sanitizer-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev \
+          clang
+
+    - name: Configure with AddressSanitizer
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests with ASan
+      working-directory: build
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      run: ctest --output-on-failure --timeout 300
+
+  # ===========================================
+  # Thread Safety Check with ThreadSanitizer
+  # ===========================================
+  thread-sanitizer:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev \
+          clang
+
+    - name: Configure with ThreadSanitizer
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests with TSan
+      working-directory: build
+      env:
+        TSAN_OPTIONS: abort_on_error=1
+      run: ctest --output-on-failure --timeout 300
+
+  # ===========================================
+  # Undefined Behavior Sanitizer
+  # ===========================================
+  ubsan-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev \
+          clang
+
+    - name: Configure with UBSan
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_CXX_FLAGS="-fsanitize=undefined -fno-omit-frame-pointer -g" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=undefined"
+
+    - name: Build
+      run: cmake --build build --parallel $(nproc)
+
+    - name: Run Tests with UBSan
+      working-directory: build
+      env:
+        UBSAN_OPTIONS: print_stacktrace=1:abort_on_error=1
+      run: ctest --output-on-failure --timeout 300

@@ -1,0 +1,208 @@
+# DELILA2 Code Quality Checks
+# Runs static analysis and code formatting checks
+
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ===========================================
+  # Check Code Formatting with clang-format
+  # ===========================================
+  clang-format:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format-14
+
+    - name: Check formatting
+      run: |
+        # Find all C++ source files
+        FILES=$(find lib examples tests -name "*.cpp" -o -name "*.hpp" -o -name "*.h" 2>/dev/null | grep -v build || true)
+
+        if [ -z "$FILES" ]; then
+          echo "No C++ files found to check"
+          exit 0
+        fi
+
+        # Check formatting (dry-run)
+        UNFORMATTED=""
+        for file in $FILES; do
+          if [ -f "$file" ]; then
+            DIFF=$(clang-format-14 --style=file --dry-run --Werror "$file" 2>&1 || true)
+            if [ -n "$DIFF" ]; then
+              UNFORMATTED="$UNFORMATTED $file"
+            fi
+          fi
+        done
+
+        if [ -n "$UNFORMATTED" ]; then
+          echo "The following files need formatting:"
+          echo "$UNFORMATTED"
+          echo ""
+          echo "Run 'clang-format -i <file>' to fix formatting"
+          # Don't fail for now, just warn
+          # exit 1
+        else
+          echo "All files are properly formatted!"
+        fi
+
+  # ===========================================
+  # Static Analysis with clang-tidy
+  # ===========================================
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          clang-tidy-14 \
+          libzmq3-dev \
+          libgtest-dev \
+          nlohmann-json3-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run clang-tidy
+      run: |
+        # Find source files in lib directory
+        FILES=$(find lib -name "*.cpp" 2>/dev/null | head -20 || true)
+
+        if [ -z "$FILES" ]; then
+          echo "No source files found"
+          exit 0
+        fi
+
+        # Run clang-tidy with compile_commands.json
+        ERRORS=0
+        for file in $FILES; do
+          echo "Checking $file..."
+          clang-tidy-14 -p build "$file" \
+            --checks='-*,bugprone-*,performance-*,readability-*,-readability-magic-numbers,-readability-identifier-length' \
+            --quiet 2>/dev/null || ERRORS=$((ERRORS + 1))
+        done
+
+        if [ $ERRORS -gt 0 ]; then
+          echo "clang-tidy found issues in $ERRORS files"
+          # Don't fail, just report
+        fi
+
+  # ===========================================
+  # Check for Common Issues
+  # ===========================================
+  code-checks:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "=== TODO Comments ==="
+        grep -rn "TODO" lib examples --include="*.cpp" --include="*.hpp" || echo "No TODOs found"
+        echo ""
+        echo "=== FIXME Comments ==="
+        grep -rn "FIXME" lib examples --include="*.cpp" --include="*.hpp" || echo "No FIXMEs found"
+
+    - name: Check for debugging code
+      run: |
+        echo "=== Checking for debug statements ==="
+        # Check for common debug patterns that shouldn't be in production
+        ISSUES=""
+
+        if grep -rn "std::cout <<" lib --include="*.cpp" 2>/dev/null | grep -v "// DEBUG" | grep -v test; then
+          ISSUES="$ISSUES\nFound std::cout statements in lib/"
+        fi
+
+        if grep -rn "printf(" lib --include="*.cpp" 2>/dev/null | grep -v "// DEBUG"; then
+          ISSUES="$ISSUES\nFound printf statements in lib/"
+        fi
+
+        if [ -n "$ISSUES" ]; then
+          echo "Warning: Found potential debug code:"
+          echo -e "$ISSUES"
+        else
+          echo "No obvious debug code found"
+        fi
+
+    - name: Check header guards
+      run: |
+        echo "=== Checking header guards ==="
+        for header in $(find lib -name "*.hpp" -o -name "*.h" 2>/dev/null); do
+          if ! head -20 "$header" | grep -q "#pragma once\|#ifndef"; then
+            echo "Missing header guard: $header"
+          fi
+        done
+        echo "Header guard check complete"
+
+    - name: Check for large files
+      run: |
+        echo "=== Checking for large source files ==="
+        find lib -name "*.cpp" -o -name "*.hpp" 2>/dev/null | while read file; do
+          LINES=$(wc -l < "$file")
+          if [ "$LINES" -gt 1000 ]; then
+            echo "Large file ($LINES lines): $file"
+          fi
+        done
+        echo "File size check complete"
+
+  # ===========================================
+  # Documentation Check
+  # ===========================================
+  docs-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for README
+      run: |
+        if [ ! -f "README.md" ]; then
+          echo "Warning: README.md not found"
+        else
+          echo "README.md found"
+          wc -l README.md
+        fi
+
+    - name: Check for license
+      run: |
+        if [ ! -f "LICENSE" ] && [ ! -f "LICENSE.md" ] && [ ! -f "LICENSE.txt" ]; then
+          echo "Warning: LICENSE file not found"
+        else
+          echo "License file found"
+        fi
+
+    - name: Check Doxygen comments coverage
+      run: |
+        echo "=== Checking documentation coverage ==="
+        TOTAL_FUNCS=$(grep -rh "^[[:space:]]*\(virtual \)\?\(bool\|void\|int\|std::\|auto\)" lib/*/include --include="*.hpp" 2>/dev/null | wc -l || echo 0)
+        DOCUMENTED=$(grep -rh "@brief\|/// " lib/*/include --include="*.hpp" 2>/dev/null | wc -l || echo 0)
+
+        echo "Public functions/methods: ~$TOTAL_FUNCS"
+        echo "Documentation comments: ~$DOCUMENTED"
