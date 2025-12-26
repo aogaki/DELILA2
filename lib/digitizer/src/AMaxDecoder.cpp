@@ -237,12 +237,19 @@ std::unique_ptr<EventData> AMaxDecoder::DecodeEventPair(
   size_t waveformSize = 0;
   if (hasWaveform) {
     // AMax: Peek at waveform header to get size from bits [0:11]
+    // wordIndex is already positioned at the next word (after 4 header words)
     uint64_t waveformHeader = 0;
-    std::memcpy(&waveformHeader, &(*(dataStart + (wordIndex + 1) * kWordSize)),
+    std::memcpy(&waveformHeader, &(*(dataStart + wordIndex * kWordSize)),
                 sizeof(uint64_t));
     // Extract word count directly from header bits [0:11]
     uint64_t nWordsWaveform = waveformHeader & Waveform::kWaveformWordsMask;
     waveformSize = nWordsWaveform * 4;  // AMax: 4 samples (16-bit each) per 64-bit word
+
+    if (fDumpFlag) {
+      std::cerr << "  [Peek] Waveform header: 0x" << std::hex << waveformHeader
+                << std::dec << ", words: " << nWordsWaveform
+                << ", samples: " << waveformSize << std::endl;
+    }
   }
 
   // Create EventData with proper size
@@ -329,6 +336,11 @@ void AMaxDecoder::DecodeWaveformData(
   // AMax: Extract number of waveform words directly from header bits [0:11]
   uint64_t nWordsWaveform = waveformHeader & Waveform::kWaveformWordsMask;
 
+  if (fDumpFlag) {
+    std::cerr << "  [Actual] Waveform header: 0x" << std::hex << waveformHeader
+              << std::dec << ", words: " << nWordsWaveform << std::endl;
+  }
+
   // Validate waveform header (optional - can be implemented later if needed)
   // For now, we just extract the word count
 
@@ -338,12 +350,16 @@ void AMaxDecoder::DecodeWaveformData(
   // Get waveform configuration
   WaveformConfig config = ExtractWaveformConfig(waveformHeader);
 
-  // EventData is already properly sized, verify it matches
+  // Resize EventData to match actual waveform size
   // AMax: 4 samples per word (16-bit each)
-  size_t expectedSize = nWordsWaveform * 4;
-  if (eventData.waveformSize != expectedSize) {
-    std::cerr << "Waveform size mismatch: expected " << expectedSize << ", got "
-              << eventData.waveformSize << std::endl;
+  size_t actualSize = nWordsWaveform * 4;
+  if (eventData.waveformSize != actualSize) {
+    // Resize the waveform vectors to match actual size
+    eventData.ResizeWaveform(actualSize);
+
+    if (fDumpFlag) {
+      std::cerr << "  Resized waveform to " << actualSize << " samples" << std::endl;
+    }
   }
 
   // Decode waveform data

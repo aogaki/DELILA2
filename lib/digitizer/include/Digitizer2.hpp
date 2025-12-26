@@ -31,6 +31,7 @@ class Digitizer2 : public IDigitizer
   // Main lifecycle methods
   bool Initialize(const ConfigurationManager &config) override;
   bool Configure() override;
+  bool ArmAcquisition() override;
   bool StartAcquisition() override;
   bool StopAcquisition() override;
 
@@ -76,6 +77,7 @@ class Digitizer2 : public IDigitizer
   std::unique_ptr<IDecoder> fDecoder;
   std::unique_ptr<ParameterValidator> fParameterValidator;
   bool fDataTakingFlag = false;
+  bool fArmedFlag = false;  // Track armed state for two-phase start
   std::vector<std::thread> fReadDataThreads;
   std::mutex fReadDataMutex;
 

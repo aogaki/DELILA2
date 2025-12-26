@@ -1,6 +1,7 @@
 #ifndef DATAPROCESSOR_HPP
 #define DATAPROCESSOR_HPP
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -79,9 +80,25 @@ class DataProcessor
             uint64_t>
   DecodeMinimal(const std::unique_ptr<std::vector<uint8_t>> &data);
 
+  // Sequence number management
+  uint64_t GetNextSequence();
+  uint64_t GetCurrentSequence() const;
+  void ResetSequence();
+
+  // Auto-sequence processing (uses internal counter)
+  std::unique_ptr<std::vector<uint8_t>> ProcessWithAutoSequence(
+      const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events);
+
+  std::unique_ptr<std::vector<uint8_t>> ProcessWithAutoSequence(
+      const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
+          &events);
+
  private:
   bool compression_enabled_ = true;  // Default: LZ4 compression ON
   bool checksum_enabled_ = true;     // Default: CRC32 checksum ON
+
+  // Sequence counter for auto-sequence processing
+  std::atomic<uint64_t> sequence_counter_{0};
 
   // Internal processing methods
   std::unique_ptr<std::vector<uint8_t>> Serialize(

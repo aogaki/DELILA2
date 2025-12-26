@@ -88,7 +88,7 @@ bool Digitizer2::Initialize(const ConfigurationManager &config)
   // Open the digitizer
   if (Open(fURL)) {
     GetDeviceTree();
-    // std::cout << fDeviceTree.dump(2) << std::endl;
+    std::cout << fDeviceTree.dump(2) << std::endl;
     return true;
   }
   return false;
@@ -260,13 +260,14 @@ bool Digitizer2::ConfigureSampleRate()
   return true;
 }
 
-bool Digitizer2::StartAcquisition()
+bool Digitizer2::ArmAcquisition()
 {
-  std::cout << "Start acquisition" << std::endl;
+  std::cout << "Arm acquisition" << std::endl;
 
-  // Arm the acquisition
-
-  // Initialize EventData storage if not already created
+  if (fArmedFlag) {
+    std::cout << "Already armed" << std::endl;
+    return true;
+  }
 
   // Start data acquisition threads
   fDataTakingFlag = true;
@@ -274,19 +275,32 @@ bool Digitizer2::StartAcquisition()
     fReadDataThreads.emplace_back(&Digitizer2::ReadDataThread, this);
   }
 
-  // Start single EventData conversion thread
+  // Send arm command to hardware
+  if (!SendCommand("/cmd/ArmAcquisition")) {
+    std::cerr << "Failed to arm acquisition" << std::endl;
+    return false;
+  }
 
-  SendCommand("/cmd/ArmAcquisition");
+  fArmedFlag = true;
+  std::cout << "Acquisition armed - ready for StartAcquisition()" << std::endl;
+  return true;
+}
+
+bool Digitizer2::StartAcquisition()
+{
+  std::cout << "Start acquisition" << std::endl;
+
+  // If not armed, arm first (for backward compatibility)
+  if (!fArmedFlag) {
+    if (!ArmAcquisition()) {
+      return false;
+    }
+  }
 
   auto status = true;
   // Only send software start command if StartSource is set to SWcmd
   std::string startSource;
   if (GetParameter("/par/StartSource", startSource) && startSource == "SWcmd") {
-    std::cout << "StartSource is SWcmd - waiting before sending software start "
-                 "command"
-              << std::endl;
-    // Short sleep to allow other digitizers to prepare
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     std::cout << "Sending software start command" << std::endl;
     status &= SendCommand("/cmd/SwStartAcquisition");
   } else {
@@ -313,6 +327,7 @@ bool Digitizer2::StopAcquisition()
   }
 
   fDataTakingFlag = false;
+  fArmedFlag = false;  // Reset armed state
 
   // Stop data acquisition threads
   for (auto &thread : fReadDataThreads) {
@@ -320,9 +335,7 @@ bool Digitizer2::StopAcquisition()
       thread.join();
     }
   }
-
-  // Stop EventData conversion thread
-  fDataTakingFlag = false;  // This will stop conversion thread too
+  fReadDataThreads.clear();  // Clear thread vector for next run
 
   // Decoder will stop automatically when threads join
 
@@ -845,29 +858,27 @@ bool Digitizer2::ApplyAMaxParameter(const std::string &path,
 {
   try {
     if (IsRegisterPath(path)) {
-      // Register access via CAEN_FELib_SetUserRegister
+      // Register access via CAEN_FELib user register interface
       uint32_t address = ParseRegisterAddress(path);
       uint32_t regValue = std::stoul(value, nullptr, 0);
 
+      // IMPORTANT: CAEN user registers use byte addressing (multiply by 4)
+      uint32_t byteAddress = address * 4;
+
       if (fDebugFlag) {
-        std::cout << "Setting register 0x" << std::hex << address << " = 0x"
-                  << regValue << std::dec << " (" << regValue << ")"
-                  << std::endl;
+        std::cout << "Setting register 0x" << std::hex << address
+                  << " (byte addr: 0x" << byteAddress << ") = 0x" << regValue
+                  << std::dec << " (" << regValue << ")" << std::endl;
       }
 
-      // Call SetUserRegister (assuming it exists in CAEN_FELib)
-      // Note: This assumes CAEN_FELib_SetUserRegister is available
-      // If not, we would need to use a different approach
-
-      // For now, we'll use the raw register write approach
-      // Format: "/reg/0xADDRESS" -> write to user register
-      std::string regPath = "/board/userreg/" + std::to_string(address);
-      int ret = CAEN_FELib_SetValue(fHandle, regPath.c_str(), value.c_str());
+      // Use direct CAEN_FELib_SetUserRegister API (not path-based SetValue)
+      // This is the correct method as shown in PreSearch/AMax/test_registers.cpp
+      int ret = CAEN_FELib_SetUserRegister(fHandle, byteAddress, regValue);
 
       if (ret != CAEN_FELib_Success) {
         std::cerr << "SetUserRegister failed for address 0x" << std::hex
-                  << address << std::dec << " with error code: " << ret
-                  << std::endl;
+                  << address << " (byte: 0x" << byteAddress << ")" << std::dec
+                  << " with error code: " << ret << std::endl;
         return false;
       }
 

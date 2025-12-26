@@ -111,15 +111,41 @@ class IDigitizer
   virtual bool Configure() = 0;
   
   /**
-   * @brief Start data acquisition
-   * 
-   * Begins the data acquisition process. After calling this method,
-   * GetEventData() can be used to retrieve acquired events.
-   * 
-   * @return true if acquisition started successfully, false otherwise
-   * 
+   * @brief Arm the digitizer for acquisition (Phase 1 of two-phase start)
+   *
+   * Prepares the digitizer hardware for data acquisition. This includes
+   * starting read threads and sending the ArmAcquisition command to hardware.
+   * After calling ArmAcquisition(), the digitizer is ready to receive
+   * a StartAcquisition() command.
+   *
+   * @return true if arm successful, false otherwise
+   *
    * @pre Configure() must have been called successfully
+   * @post Digitizer is armed and waiting for start command
+   *
+   * @note For synchronized multi-digitizer start:
+   *       1. Call ArmAcquisition() on all digitizers
+   *       2. Wait for all to report success
+   *       3. Call StartAcquisition() on all digitizers simultaneously
+   * @see StartAcquisition()
+   */
+  virtual bool ArmAcquisition() = 0;
+
+  /**
+   * @brief Start data acquisition (Phase 2 of two-phase start)
+   *
+   * Sends the software start command to begin data acquisition.
+   * For two-phase start, this should be called after ArmAcquisition().
+   * Can also be called directly after Configure() for simple single-digitizer cases,
+   * in which case it will automatically call ArmAcquisition() first.
+   *
+   * @return true if start successful, false otherwise
+   *
+   * @pre ArmAcquisition() should be called first (for two-phase start)
+   *      or Configure() must have been called (for simple start)
    * @post Data acquisition is active, events can be retrieved
+   *
+   * @see ArmAcquisition()
    */
   virtual bool StartAcquisition() = 0;
   

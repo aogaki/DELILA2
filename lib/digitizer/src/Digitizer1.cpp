@@ -124,9 +124,14 @@ bool Digitizer1::Configure()
   return true;
 }
 
-bool Digitizer1::StartAcquisition()
+bool Digitizer1::ArmAcquisition()
 {
-  std::cout << "Start acquisition" << std::endl;
+  std::cout << "Arm acquisition" << std::endl;
+
+  if (fArmedFlag) {
+    std::cout << "Already armed" << std::endl;
+    return true;
+  }
 
   // Decoder should already be created in ConfigureSampleRate()
   if (!fDecoder) {
@@ -141,29 +146,33 @@ bool Digitizer1::StartAcquisition()
     fReadDataThreads.emplace_back(&Digitizer1::ReadDataThread, this);
   }
 
-  // Note: Decoder handles data conversion internally in its threads
-
-  bool status = true;
-  // Only send software start command if startmode is set to START_MODE_SW
-  std::string startMode;
-  if (GetParameter("/par/startmode", startMode) &&
-      startMode == "START_MODE_SW") {
-    std::cout
-        << "startmode is START_MODE_SW - waiting before sending software start "
-           "command"
-        << std::endl;
-    // Short sleep to allow other digitizers to prepare
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    std::cout << "Sending software start command" << std::endl;
-    status &= SendCommand("/cmd/ArmAcquisition");
-  } else {
-    std::cout << "startmode is not START_MODE_SW (" << startMode
-              << ") - skipping software start command" << std::endl;
-    // Arm the acquisition
-    status &= SendCommand("/cmd/ArmAcquisition");
+  // Send arm command to hardware
+  if (!SendCommand("/cmd/ArmAcquisition")) {
+    std::cerr << "Failed to arm acquisition" << std::endl;
+    return false;
   }
 
-  return status;
+  fArmedFlag = true;
+  std::cout << "Acquisition armed - ready for StartAcquisition()" << std::endl;
+  return true;
+}
+
+bool Digitizer1::StartAcquisition()
+{
+  std::cout << "Start acquisition" << std::endl;
+
+  // If not armed, arm first (for backward compatibility)
+  if (!fArmedFlag) {
+    if (!ArmAcquisition()) {
+      return false;
+    }
+  }
+
+  // Note: For Digitizer1, software start is handled by ArmAcquisition
+  // No additional command needed here for START_MODE_SW
+  // The acquisition starts immediately after arm
+
+  return true;
 }
 
 bool Digitizer1::StopAcquisition()
@@ -182,6 +191,7 @@ bool Digitizer1::StopAcquisition()
   }
 
   fDataTakingFlag = false;
+  fArmedFlag = false;  // Reset armed state
 
   // Stop data acquisition threads
   for (auto &thread : fReadDataThreads) {
@@ -191,7 +201,6 @@ bool Digitizer1::StopAcquisition()
   }
   fReadDataThreads.clear();
 
-  // Stop EventData conversion thread
   // Decoder will stop automatically when threads join
 
   return status;

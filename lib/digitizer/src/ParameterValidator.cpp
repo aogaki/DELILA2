@@ -41,6 +41,12 @@ ParameterValidator::ValidationSummary ParameterValidator::ValidateParameters(
       const std::string &paramPath = configPair[0];
       const std::string &paramValue = configPair[1];
 
+      // Skip user register paths (/reg/) - they won't be in device tree
+      // User registers are validated during application in ConfigureAMax
+      if (paramPath.find("/reg/") == 0) {
+        continue;
+      }
+
       // Skip ignored parameters
       if (IsIgnored(paramPath)) {
         continue;

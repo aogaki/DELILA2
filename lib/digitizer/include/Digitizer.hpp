@@ -25,6 +25,7 @@ class Digitizer
   // Main lifecycle methods
   bool Initialize(const ConfigurationManager &config);
   bool Configure();
+  bool ArmAcquisition();
   bool StartAcquisition();
   bool StopAcquisition();
 

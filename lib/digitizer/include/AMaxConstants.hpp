@@ -204,13 +204,26 @@ inline const std::unordered_map<std::string, uint32_t> REGISTER_MAP = {
 
 /**
  * @brief Get register address by name
- * @param name Register name (case-sensitive)
+ * @param name Register name (case-insensitive)
  * @return Register address, or throws if not found
  */
 inline uint32_t GetRegisterAddress(const std::string& name) {
+    // Try exact match first (fast path)
     auto it = REGISTER_MAP.find(name);
     if (it != REGISTER_MAP.end()) {
         return it->second;
+    }
+
+    // Try case-insensitive match
+    std::string lowerName = name;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
+    for (const auto& [key, value] : REGISTER_MAP) {
+        std::string lowerKey = key;
+        std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+        if (lowerKey == lowerName) {
+            return value;
+        }
     }
 
     // Try with component prefix removed (e.g., "cfd_param/delay_in" -> "delay_in")
@@ -220,6 +233,18 @@ inline uint32_t GetRegisterAddress(const std::string& name) {
         it = REGISTER_MAP.find(simpleName);
         if (it != REGISTER_MAP.end()) {
             return it->second;
+        }
+
+        // Try case-insensitive on simple name too
+        std::string lowerSimpleName = simpleName;
+        std::transform(lowerSimpleName.begin(), lowerSimpleName.end(), lowerSimpleName.begin(), ::tolower);
+
+        for (const auto& [key, value] : REGISTER_MAP) {
+            std::string lowerKey = key;
+            std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
+            if (lowerKey == lowerSimpleName) {
+                return value;
+            }
         }
     }
 

@@ -18,6 +18,7 @@ add_library(delila_net OBJECT
     src/ZMQTransport.cpp
     src/EventData.cpp
     src/DataProcessor.cpp
+    src/SequenceGapDetector.cpp
 )
 
 # Add include directories

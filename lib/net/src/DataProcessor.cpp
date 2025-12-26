@@ -667,4 +667,34 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::DecompressLZ4(
   return nullptr;
 }
 
+// Sequence number management
+uint64_t DataProcessor::GetNextSequence()
+{
+  return sequence_counter_.fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t DataProcessor::GetCurrentSequence() const
+{
+  return sequence_counter_.load(std::memory_order_relaxed);
+}
+
+void DataProcessor::ResetSequence()
+{
+  sequence_counter_.store(0, std::memory_order_relaxed);
+}
+
+// Auto-sequence processing
+std::unique_ptr<std::vector<uint8_t>> DataProcessor::ProcessWithAutoSequence(
+    const std::unique_ptr<std::vector<std::unique_ptr<EventData>>> &events)
+{
+  return Process(events, GetNextSequence());
+}
+
+std::unique_ptr<std::vector<uint8_t>> DataProcessor::ProcessWithAutoSequence(
+    const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
+        &events)
+{
+  return Process(events, GetNextSequence());
+}
+
 }  // namespace DELILA::Net

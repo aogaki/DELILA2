@@ -41,6 +41,12 @@ bool Digitizer::Configure()
   return fDigitizerImpl->Configure();
 }
 
+bool Digitizer::ArmAcquisition()
+{
+  if (!fDigitizerImpl) return false;
+  return fDigitizerImpl->ArmAcquisition();
+}
+
 bool Digitizer::StartAcquisition()
 {
   if (!fDigitizerImpl) return false;

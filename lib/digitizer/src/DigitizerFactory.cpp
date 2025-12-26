@@ -36,6 +36,8 @@ std::unique_ptr<IDigitizer> DigitizerFactory::CreateDigitizer(
       type = FirmwareType::PHA1;
     else if (typeStr == "PHA2")
       type = FirmwareType::PHA2;
+    else if (typeStr == "AMAX")
+      type = FirmwareType::AMAX;
     else if (typeStr == "QDC1")
       type = FirmwareType::QDC1;
     else if (typeStr == "SCOPE1")
@@ -60,6 +62,7 @@ std::unique_ptr<IDigitizer> DigitizerFactory::CreateDigitizer(
 
     case FirmwareType::PSD2:
     case FirmwareType::PHA2:
+    case FirmwareType::AMAX:
     case FirmwareType::SCOPE2:
       // Create Digitizer2 instance (renamed from original Digitizer class)
       return std::make_unique<Digitizer2>();
