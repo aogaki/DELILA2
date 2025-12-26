@@ -16,7 +16,6 @@
  * - For core data structures: #include "delila/core/EventData.hpp"
  * - For digitizer only: #include "delila/digitizer/Digitizer.hpp"
  * - For network only: #include "delila/net/ZMQTransport.hpp"
- * - For monitoring only: #include "delila/monitor/Monitor.hpp"
  */
 
 // ============================================================================
@@ -71,14 +70,6 @@
 // Core network transport and serialization
 #include "delila/net/Serializer.hpp"
 #include "delila/net/ZMQTransport.hpp"
-
-// ============================================================================
-// MONITOR LIBRARY HEADERS
-// ============================================================================
-
-// Real-time event monitoring and histogram generation
-#include "delila/monitor/Monitor.hpp"
-#include "delila/monitor/Recorder.hpp"
 
 // ============================================================================
 // LIBRARY UTILITIES AND VERSION INFO

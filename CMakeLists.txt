@@ -78,14 +78,6 @@ if(NOT ZMQ_FOUND)
     endif()
 endif()
 
-# Find ROOT (required for Monitor library)
-find_package(ROOT QUIET)
-if(ROOT_FOUND)
-    message(STATUS "Found ROOT at: ${ROOT_INCLUDE_DIRS}")
-else()
-    message(WARNING "ROOT not found - Monitor library will not have full functionality")
-endif()
-
 # Find CAEN FELib
 find_library(CAEN_FELIB CAEN_FELib)
 if(CAEN_FELIB)
@@ -118,10 +110,7 @@ else()
     message(STATUS "Network functionality disabled - ZMQ not found")
 endif()
 
-# Monitor sources (may depend on ROOT)
-file(GLOB_RECURSE MONITOR_SOURCES "lib/monitor/src/*.cpp")
-
-set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES} ${MONITOR_SOURCES})
+set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES})
 
 # Create a simple main source file for version info
 set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
@@ -153,10 +142,9 @@ add_library(DELILA SHARED
 
 # Add include directories
 target_include_directories(DELILA
-    PUBLIC 
+    PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/digitizer/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/monitor/include>
         $<INSTALL_INTERFACE:include>
 )
 
@@ -174,31 +162,6 @@ if(ZMQ_FOUND)
 endif()
 if(CAEN_FELIB)
     target_link_libraries(DELILA PUBLIC ${CAEN_FELIB})
-endif()
-if(ROOT_FOUND)
-    # Get ROOT library directory
-    execute_process(COMMAND root-config --libdir
-        OUTPUT_VARIABLE ROOT_LIB_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    
-    # Find RHTTP library specifically
-    find_library(ROOT_RHTTP_LIBRARY 
-        NAMES RHTTP libRHTTP
-        PATHS ${ROOT_LIB_DIR}
-        NO_DEFAULT_PATH
-    )
-    
-    if(ROOT_RHTTP_LIBRARY)
-        target_link_libraries(DELILA PUBLIC ${ROOT_LIBRARIES} ${ROOT_RHTTP_LIBRARY})
-        message(STATUS "Found ROOT RHTTP library: ${ROOT_RHTTP_LIBRARY}")
-    else()
-        target_link_libraries(DELILA PUBLIC ${ROOT_LIBRARIES})
-        message(WARNING "ROOT RHTTP library not found - THttpServer will not work")
-    endif()
-    
-    target_include_directories(DELILA PUBLIC ${ROOT_INCLUDE_DIRS})
-    target_compile_definitions(DELILA PUBLIC ROOT_FOUND)
 endif()
 
 # Compiler definitions
@@ -271,11 +234,6 @@ if(ZMQ_FOUND)
     )
 endif()
 
-# Install monitor library headers
-install(DIRECTORY lib/monitor/include/
-    DESTINATION include/delila/monitor
-    FILES_MATCHING PATTERN "*.hpp"
-)
 
 # Export targets for other CMake projects
 install(EXPORT DELILA2Targets
@@ -313,7 +271,6 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "")
 message(STATUS "Optional Dependencies:")
 message(STATUS "  ZMQ (Network):     ${ZMQ_FOUND}")
-message(STATUS "  ROOT (Monitor):    ${ROOT_FOUND}")
 if(CAEN_FELIB)
     message(STATUS "  CAEN FELib:        YES")
 else()
@@ -326,10 +283,10 @@ if(ZMQ_FOUND)
 else()
     message(STATUS "  Network functionality: DISABLED (install libzmq3-dev/zeromq-devel)")
 endif()
-if(ROOT_FOUND)
-    message(STATUS "  Monitoring:            ENABLED")
+if(CAEN_FELIB)
+    message(STATUS "  Digitizer:             ENABLED")
 else()
-    message(STATUS "  Monitoring:            LIMITED (install ROOT)")
+    message(STATUS "  Digitizer:             DISABLED (CAEN FELib not found)")
 endif()
 message(STATUS "======================================================")
 message(STATUS "")
