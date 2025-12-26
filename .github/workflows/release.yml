@@ -91,6 +91,7 @@ jobs:
           cmake \
           pkg-config \
           zeromq \
+          cppzmq \
           nlohmann-json
 
     - name: Configure CMake

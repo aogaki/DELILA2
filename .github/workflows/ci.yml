@@ -106,6 +106,7 @@ jobs:
           cmake \
           pkg-config \
           zeromq \
+          cppzmq \
           googletest \
           google-benchmark \
           nlohmann-json
