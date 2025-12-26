@@ -168,7 +168,7 @@ BENCHMARK(BM_DataProcessor_EventData_Process)->Range(8, 8192)->Unit(benchmark::k
 static void BM_DataProcessor_EventData_WithWaveforms(benchmark::State& state) {
     auto events = CreateTestEventDataWithWaveforms(state.range(0), 1024);
     DataProcessor processor;
-    processor.EnableCompression(true);
+    // Compression removed - LZ4 is no longer available
     processor.EnableChecksum(true);
     
     for (auto _ : state) {
@@ -203,7 +203,7 @@ BENCHMARK(BM_DataProcessor_EventData_WithWaveforms)->Range(8, 256)->Unit(benchma
 static void BM_DataProcessor_Compression_Enabled(benchmark::State& state) {
     auto events = CreateTestEventDataWithWaveforms(state.range(0), 512);
     DataProcessor processor;
-    processor.EnableCompression(true);
+    // Compression removed - LZ4 is no longer available
     processor.EnableChecksum(false); // Focus on compression only
     
     for (auto _ : state) {
@@ -223,7 +223,7 @@ BENCHMARK(BM_DataProcessor_Compression_Enabled)->Range(8, 512)->Unit(benchmark::
 static void BM_DataProcessor_Compression_Disabled(benchmark::State& state) {
     auto events = CreateTestEventDataWithWaveforms(state.range(0), 512);
     DataProcessor processor;
-    processor.EnableCompression(false);
+    // Compression removed - no longer available
     processor.EnableChecksum(false); // Focus on compression only
     
     for (auto _ : state) {
@@ -248,7 +248,7 @@ BENCHMARK(BM_DataProcessor_Compression_Disabled)->Range(8, 512)->Unit(benchmark:
 static void BM_DataProcessor_CRC32_Enabled(benchmark::State& state) {
     auto events = CreateTestMinimalEvents(state.range(0));
     DataProcessor processor;
-    processor.EnableCompression(false); // Focus on checksum only
+    // Compression removed - no longer available // Focus on checksum only
     processor.EnableChecksum(true);     // Enable CRC32
     
     for (auto _ : state) {
@@ -265,7 +265,7 @@ BENCHMARK(BM_DataProcessor_CRC32_Enabled)->Range(8, 8192)->Unit(benchmark::kMicr
 static void BM_DataProcessor_CRC32_Disabled(benchmark::State& state) {
     auto events = CreateTestMinimalEvents(state.range(0));
     DataProcessor processor;
-    processor.EnableCompression(false); // Focus on checksum only  
+    // Compression removed - no longer available // Focus on checksum only  
     processor.EnableChecksum(false);    // Disable checksum
     
     for (auto _ : state) {
@@ -335,7 +335,7 @@ static void BM_DataProcessor_Nuclear_Physics_Burst(benchmark::State& state) {
     auto waveform_events = CreateTestEventDataWithWaveforms(waveform_count, 2048); // 2K samples
     
     DataProcessor processor;
-    processor.EnableCompression(true);  // Compression essential for waveforms
+    // Compression removed - LZ4 is no longer available  // Compression essential for waveforms
     processor.EnableChecksum(true);     // Data integrity crucial
     
     for (auto _ : state) {

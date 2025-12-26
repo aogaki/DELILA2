@@ -63,6 +63,12 @@ bool ZMQTransport::ConfigureFromJSON(const nlohmann::json &config)
     if (config.contains("is_publisher")) {
       transport_config.is_publisher = config["is_publisher"];
     }
+    if (config.contains("command_address")) {
+      transport_config.command_address = config["command_address"];
+    }
+    if (config.contains("bind_command")) {
+      transport_config.bind_command = config["bind_command"];
+    }
 
     return Configure(transport_config);
 
@@ -188,6 +194,20 @@ bool ZMQTransport::Connect()
       }
     }
 
+    // Create command socket (REQ/REP pattern)
+    // REQ for client (Operator), REP for server (Component)
+    if (!fConfig.command_address.empty()) {
+      int cmd_socket_type = fConfig.bind_command ? ZMQ_REP : ZMQ_REQ;
+      fCommandSocket = std::make_unique<zmq::socket_t>(*fContext, cmd_socket_type);
+      fCommandSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second default timeout
+
+      if (fConfig.bind_command) {
+        fCommandSocket->bind(fConfig.command_address);
+      } else {
+        fCommandSocket->connect(fConfig.command_address);
+      }
+    }
+
     fConnected = true;
     return true;
 
@@ -233,6 +253,11 @@ void ZMQTransport::Disconnect()
   if (fStatusSocket) {
     fStatusSocket->close();
     fStatusSocket.reset();
+  }
+
+  if (fCommandSocket) {
+    fCommandSocket->close();
+    fCommandSocket.reset();
   }
 }
 
@@ -416,6 +441,235 @@ std::unique_ptr<ComponentStatus> ZMQTransport::DeserializeStatus(
   }
 
   return status;
+}
+
+// Command channel implementation (REQ/REP pattern)
+std::optional<DELILA::CommandResponse> ZMQTransport::SendCommand(
+    const DELILA::Command &cmd, std::chrono::milliseconds timeout)
+{
+  if (!fConnected || !fCommandSocket) {
+    return std::nullopt;
+  }
+
+  try {
+    // Set timeout for this operation
+    fCommandSocket->set(zmq::sockopt::rcvtimeo,
+                        static_cast<int>(timeout.count()));
+
+    // Serialize and send command
+    std::string json = SerializeCommand(cmd);
+    zmq::message_t request(json.size());
+    std::memcpy(request.data(), json.c_str(), json.size());
+
+    auto send_result = fCommandSocket->send(request, zmq::send_flags::none);
+    if (!send_result.has_value()) {
+      return std::nullopt;
+    }
+
+    // Wait for response
+    zmq::message_t reply;
+    auto recv_result = fCommandSocket->recv(reply, zmq::recv_flags::none);
+    if (!recv_result.has_value() || reply.size() == 0) {
+      return std::nullopt;
+    }
+
+    std::string reply_json(static_cast<const char *>(reply.data()),
+                           reply.size());
+    return DeserializeCommandResponse(reply_json);
+
+  } catch (const zmq::error_t &e) {
+    return std::nullopt;
+  }
+}
+
+std::optional<DELILA::Command> ZMQTransport::ReceiveCommand(
+    std::chrono::milliseconds timeout)
+{
+  if (!fConnected || !fCommandSocket) {
+    return std::nullopt;
+  }
+
+  try {
+    // Set timeout
+    fCommandSocket->set(zmq::sockopt::rcvtimeo,
+                        static_cast<int>(timeout.count()));
+
+    zmq::message_t request;
+    auto result = fCommandSocket->recv(request, zmq::recv_flags::none);
+
+    if (!result.has_value() || request.size() == 0) {
+      return std::nullopt;
+    }
+
+    std::string json(static_cast<const char *>(request.data()), request.size());
+    return DeserializeCommand(json);
+
+  } catch (const zmq::error_t &e) {
+    return std::nullopt;
+  }
+}
+
+bool ZMQTransport::SendCommandResponse(const DELILA::CommandResponse &response)
+{
+  if (!fConnected || !fCommandSocket) {
+    return false;
+  }
+
+  try {
+    std::string json = SerializeCommandResponse(response);
+    zmq::message_t reply(json.size());
+    std::memcpy(reply.data(), json.c_str(), json.size());
+
+    auto result = fCommandSocket->send(reply, zmq::send_flags::none);
+    return result.has_value();
+
+  } catch (const zmq::error_t &e) {
+    return false;
+  }
+}
+
+// JSON serialization for Command
+std::string ZMQTransport::SerializeCommand(const DELILA::Command &cmd) const
+{
+  std::ostringstream json;
+  json << "{";
+  json << "\"type\":" << static_cast<int>(cmd.type) << ",";
+  json << "\"request_id\":" << cmd.request_id << ",";
+  json << "\"config_path\":\"" << cmd.config_path << "\",";
+  json << "\"payload\":\"" << cmd.payload << "\"";
+  json << "}";
+  return json.str();
+}
+
+std::optional<DELILA::Command> ZMQTransport::DeserializeCommand(
+    const std::string &json) const
+{
+  DELILA::Command cmd;
+
+  // Extract type
+  size_t pos = json.find("\"type\":");
+  if (pos != std::string::npos) {
+    pos += 7;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      int type_val = std::stoi(json.substr(pos, end - pos));
+      cmd.type = static_cast<DELILA::CommandType>(type_val);
+    }
+  }
+
+  // Extract request_id
+  pos = json.find("\"request_id\":");
+  if (pos != std::string::npos) {
+    pos += 13;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      cmd.request_id = std::stoul(json.substr(pos, end - pos));
+    }
+  }
+
+  // Extract config_path
+  pos = json.find("\"config_path\":\"");
+  if (pos != std::string::npos) {
+    pos += 15;
+    size_t end = json.find("\"", pos);
+    if (end != std::string::npos) {
+      cmd.config_path = json.substr(pos, end - pos);
+    }
+  }
+
+  // Extract payload
+  pos = json.find("\"payload\":\"");
+  if (pos != std::string::npos) {
+    pos += 11;
+    size_t end = json.find("\"", pos);
+    if (end != std::string::npos) {
+      cmd.payload = json.substr(pos, end - pos);
+    }
+  }
+
+  return cmd;
+}
+
+std::string ZMQTransport::SerializeCommandResponse(
+    const DELILA::CommandResponse &response) const
+{
+  std::ostringstream json;
+  json << "{";
+  json << "\"request_id\":" << response.request_id << ",";
+  json << "\"success\":" << (response.success ? "true" : "false") << ",";
+  json << "\"error_code\":" << static_cast<int>(response.error_code) << ",";
+  json << "\"current_state\":" << static_cast<int>(response.current_state) << ",";
+  json << "\"message\":\"" << response.message << "\",";
+  json << "\"payload\":\"" << response.payload << "\"";
+  json << "}";
+  return json.str();
+}
+
+std::optional<DELILA::CommandResponse> ZMQTransport::DeserializeCommandResponse(
+    const std::string &json) const
+{
+  DELILA::CommandResponse response;
+
+  // Extract request_id
+  size_t pos = json.find("\"request_id\":");
+  if (pos != std::string::npos) {
+    pos += 13;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      response.request_id = std::stoul(json.substr(pos, end - pos));
+    }
+  }
+
+  // Extract success
+  pos = json.find("\"success\":");
+  if (pos != std::string::npos) {
+    pos += 10;
+    response.success = (json.substr(pos, 4) == "true");
+  }
+
+  // Extract error_code
+  pos = json.find("\"error_code\":");
+  if (pos != std::string::npos) {
+    pos += 13;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      int code_val = std::stoi(json.substr(pos, end - pos));
+      response.error_code = static_cast<DELILA::ErrorCode>(code_val);
+    }
+  }
+
+  // Extract current_state
+  pos = json.find("\"current_state\":");
+  if (pos != std::string::npos) {
+    pos += 16;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      int state_val = std::stoi(json.substr(pos, end - pos));
+      response.current_state = static_cast<DELILA::ComponentState>(state_val);
+    }
+  }
+
+  // Extract message
+  pos = json.find("\"message\":\"");
+  if (pos != std::string::npos) {
+    pos += 11;
+    size_t end = json.find("\"", pos);
+    if (end != std::string::npos) {
+      response.message = json.substr(pos, end - pos);
+    }
+  }
+
+  // Extract payload
+  pos = json.find("\"payload\":\"");
+  if (pos != std::string::npos) {
+    pos += 11;
+    size_t end = json.find("\"", pos);
+    if (end != std::string::npos) {
+      response.payload = json.substr(pos, end - pos);
+    }
+  }
+
+  return response;
 }
 
 }  // namespace DELILA::Net

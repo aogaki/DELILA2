@@ -357,130 +357,6 @@ TEST_F(SerializationTest, ProcessHandlesNullMinimalEventData) {
     EXPECT_EQ(result, nullptr);
 }
 
-// Phase 4: Compression Tests (TDD - Write tests FIRST)
-class CompressionTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        processor = std::make_unique<DataProcessor>();
-    }
-    
-    // Helper to create test data for compression
-    std::unique_ptr<std::vector<uint8_t>> CreateTestData(size_t size, uint8_t pattern = 0xAA) {
-        auto data = std::make_unique<std::vector<uint8_t>>();
-        data->reserve(size);
-        for (size_t i = 0; i < size; ++i) {
-            data->push_back(static_cast<uint8_t>(pattern + (i % 10)));  // Create some pattern
-        }
-        return data;
-    }
-    
-    // Helper to create highly compressible data (repeated pattern)
-    std::unique_ptr<std::vector<uint8_t>> CreateCompressibleData(size_t size) {
-        auto data = std::make_unique<std::vector<uint8_t>>(size, 0xAB);  // All same byte
-        return data;
-    }
-    
-    std::unique_ptr<DataProcessor> processor;
-};
-
-// RED phase: Test compression methods that don't exist yet 
-// Note: These will need CompressLZ4/DecompressLZ4 to be made public for testing
-TEST_F(CompressionTest, CompressLZ4WithEmptyData) {
-    auto empty_data = std::make_unique<std::vector<uint8_t>>();
-    
-    // Should handle empty input gracefully (when implemented)
-    // For now, this tests internal methods that will be implemented
-    // Expect this to fail until compression is implemented
-    SUCCEED(); // Placeholder until we can call CompressLZ4 directly
-}
-
-TEST_F(CompressionTest, CompressLZ4WithSmallData) {
-    auto small_data = CreateTestData(100);
-    
-    // Test compression of small data (when implemented)
-    // Internal CompressLZ4 method should handle this
-    SUCCEED(); // Placeholder until we can call CompressLZ4 directly
-}
-
-TEST_F(CompressionTest, CompressLZ4WithLargeCompressibleData) {
-    auto large_data = CreateCompressibleData(10000);  // 10KB of repeated data
-    
-    // This should compress very well (when implemented)
-    // Internal CompressLZ4 method should reduce size significantly
-    SUCCEED(); // Placeholder until we can call CompressLZ4 directly
-}
-
-TEST_F(CompressionTest, CompressLZ4WithRandomData) {
-    auto random_data = CreateTestData(5000, 0x12);  // More random pattern
-    
-    // This might not compress well (when implemented)
-    // Internal CompressLZ4 method should handle this case
-    SUCCEED(); // Placeholder until we can call CompressLZ4 directly
-}
-
-TEST_F(CompressionTest, DecompressLZ4WithValidData) {
-    // First compress some data, then decompress it (when implemented)
-    auto original_data = CreateCompressibleData(1000);
-    
-    // Test round-trip: compress then decompress (when implemented)
-    // Internal DecompressLZ4 method should restore original data
-    SUCCEED(); // Placeholder until we can call DecompressLZ4 directly
-}
-
-TEST_F(CompressionTest, DecompressLZ4WithInvalidData) {
-    auto invalid_data = CreateTestData(100, 0xFF);  // Not compressed data
-    
-    // Should handle invalid compressed data gracefully (when implemented)
-    // Internal DecompressLZ4 method should return nullptr or throw
-    SUCCEED(); // Placeholder until we can call DecompressLZ4 directly
-}
-
-TEST_F(CompressionTest, CompressionRoundTrip) {
-    auto original_data = CreateTestData(2000);
-    
-    // Test full round trip: original -> compress -> decompress -> compare (when implemented)
-    // This tests that CompressLZ4/DecompressLZ4 work together correctly
-    SUCCEED(); // Placeholder until compression is implemented
-}
-
-TEST_F(CompressionTest, CompressionEnabledDisabled) {
-    // Test that processor respects compression enable/disable flag
-    processor->EnableCompression(false);
-    EXPECT_FALSE(processor->IsCompressionEnabled());
-    
-    processor->EnableCompression(true);
-    EXPECT_TRUE(processor->IsCompressionEnabled());
-    
-    // When Process is implemented, it should respect this flag
-}
-
-// Test integration with Process method (full pipeline now implemented!)
-TEST_F(CompressionTest, ProcessWithCompressionEnabled) {
-    auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
-    
-    processor->EnableCompression(true);
-    // Full Process pipeline now works!
-    auto result = processor->Process(events, 0);
-    EXPECT_NE(result, nullptr);
-    
-    // Check that compression is enabled in header
-    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
-    EXPECT_EQ(header->compression_type, COMPRESSION_LZ4);
-}
-
-TEST_F(CompressionTest, ProcessWithCompressionDisabled) {
-    auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
-    
-    processor->EnableCompression(false);
-    // Full Process pipeline now works!
-    auto result = processor->Process(events, 0);
-    EXPECT_NE(result, nullptr);
-    
-    // Check that compression is disabled in header
-    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
-    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);
-}
-
 // Phase 6: Process Pipeline Tests (TDD - Write tests FIRST)
 class ProcessPipelineTest : public ::testing::Test {
 protected:
@@ -560,120 +436,77 @@ protected:
 };
 
 // GREEN phase: Test full Process pipeline (now implemented!)
-TEST_F(ProcessPipelineTest, ProcessEventDataWithAllOptionsEnabled) {
+TEST_F(ProcessPipelineTest, ProcessEventDataWithChecksumEnabled) {
     auto events = CreateTestEventData(3);
-    processor->EnableCompression(true);
     processor->EnableChecksum(true);
-    
+
     // Process should now work!
     auto result = processor->Process(events, 42);
     ASSERT_NE(result, nullptr);
-    
+
     // Validate the header
     ValidateHeader(*result, 3, 42);
-    
+
     // Check header details
     const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
     EXPECT_EQ(header->format_version, FORMAT_VERSION_EVENTDATA);
-    EXPECT_EQ(header->compression_type, COMPRESSION_LZ4);
+    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);  // Compression removed
     EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);
     EXPECT_GT(header->checksum, 0); // Should have a checksum
 }
 
-TEST_F(ProcessPipelineTest, ProcessEventDataWithCompressionDisabled) {
-    auto events = CreateTestEventData(2);
-    processor->EnableCompression(false);
-    processor->EnableChecksum(true);
-    
-    // Process should work with compression disabled
-    auto result = processor->Process(events, 123);
-    ASSERT_NE(result, nullptr);
-    
-    // Validate the header
-    ValidateHeader(*result, 2, 123);
-    
-    // Check that compression is disabled
-    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
-    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);
-    EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);
-    EXPECT_EQ(header->uncompressed_size, header->compressed_size); // No compression
-}
-
 TEST_F(ProcessPipelineTest, ProcessEventDataWithChecksumDisabled) {
     auto events = CreateTestEventData(1);
-    processor->EnableCompression(true);
     processor->EnableChecksum(false);
-    
+
     // Process should work with checksum disabled
     auto result = processor->Process(events, 456);
     ASSERT_NE(result, nullptr);
-    
+
     // Validate the header
     ValidateHeader(*result, 1, 456);
-    
+
     // Check that checksum is disabled
     const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
-    EXPECT_EQ(header->compression_type, COMPRESSION_LZ4);
+    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);  // Compression removed
     EXPECT_EQ(header->checksum_type, CHECKSUM_NONE);
     EXPECT_EQ(header->checksum, 0); // No checksum
 }
 
-TEST_F(ProcessPipelineTest, ProcessEventDataWithBothDisabled) {
-    auto events = CreateTestEventData(1);
-    processor->EnableCompression(false);
-    processor->EnableChecksum(false);
-    
-    // Process should work with both disabled
-    auto result = processor->Process(events, 789);
-    ASSERT_NE(result, nullptr);
-    
-    // Validate the header
-    ValidateHeader(*result, 1, 789);
-    
-    // Check that both are disabled
-    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
-    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);
-    EXPECT_EQ(header->checksum_type, CHECKSUM_NONE);
-    EXPECT_EQ(header->checksum, 0); // No checksum
-    EXPECT_EQ(header->uncompressed_size, header->compressed_size); // No compression
-}
-
-TEST_F(ProcessPipelineTest, ProcessMinimalEventDataWithAllOptionsEnabled) {
+TEST_F(ProcessPipelineTest, ProcessMinimalEventDataWithChecksumEnabled) {
     auto events = CreateTestMinimalEventData(5);
-    processor->EnableCompression(true);
     processor->EnableChecksum(true);
-    
+
     // Process should now work for MinimalEventData!
     auto result = processor->Process(events, 111);
     ASSERT_NE(result, nullptr);
-    
+
     // Validate the header
     ValidateHeader(*result, 5, 111);
-    
+
     // Check header details
     const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
     EXPECT_EQ(header->format_version, FORMAT_VERSION_MINIMAL_EVENTDATA);
-    EXPECT_EQ(header->compression_type, COMPRESSION_LZ4);
+    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);  // Compression removed
     EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);
 }
 
-TEST_F(ProcessPipelineTest, ProcessMinimalEventDataWithCompressionDisabled) {
+TEST_F(ProcessPipelineTest, ProcessMinimalEventDataWithChecksumDisabled) {
     auto events = CreateTestMinimalEventData(3);
-    processor->EnableCompression(false);
-    processor->EnableChecksum(true);
-    
-    // Process should work with compression disabled
+    processor->EnableChecksum(false);
+
+    // Process should work with checksum disabled
     auto result = processor->Process(events, 222);
     ASSERT_NE(result, nullptr);
-    
+
     // Validate the header
     ValidateHeader(*result, 3, 222);
-    
+
     // Check header details
     const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(result->data());
     EXPECT_EQ(header->format_version, FORMAT_VERSION_MINIMAL_EVENTDATA);
-    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);
-    EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);
+    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);  // Compression removed
+    EXPECT_EQ(header->checksum_type, CHECKSUM_NONE);
 }
 
 TEST_F(ProcessPipelineTest, ProcessEmptyEventDataVector) {
@@ -743,22 +576,13 @@ TEST_F(ProcessPipelineTest, ProcessCreatesValidHeaderStructure) {
     EXPECT_GT(header->compressed_size, 0);
     
     // Check type fields based on defaults
-    EXPECT_EQ(header->compression_type, COMPRESSION_LZ4);  // Default enabled
-    EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);     // Default enabled
+    EXPECT_EQ(header->compression_type, COMPRESSION_NONE);  // Compression removed
+    EXPECT_EQ(header->checksum_type, CHECKSUM_CRC32);       // Default enabled
 }
 
 // Basic DataProcessor Tests - placeholder for future implementation
 TEST_F(DataProcessorTest, DefaultConfiguration) {
-    EXPECT_TRUE(processor->IsCompressionEnabled());
     EXPECT_TRUE(processor->IsChecksumEnabled());
-}
-
-TEST_F(DataProcessorTest, EnableDisableCompression) {
-    processor->EnableCompression(false);
-    EXPECT_FALSE(processor->IsCompressionEnabled());
-    
-    processor->EnableCompression(true);
-    EXPECT_TRUE(processor->IsCompressionEnabled());
 }
 
 TEST_F(DataProcessorTest, EnableDisableChecksum) {
@@ -973,81 +797,27 @@ TEST_F(DecodePipelineTest, DecodeSkipsCRC32WhenDisabled) {
     EXPECT_EQ(result.first->size(), 0);  // Empty event list
 }
 
-// Phase 7.1.3: LZ4 decompression conditional logic tests (TDD RED phase)
-TEST_F(DecodePipelineTest, DecodeDecompressesLZ4WhenEnabled) {
-    // This test will need actual compressed data - placeholder for now
-    auto test_data = std::make_unique<std::vector<uint8_t>>(sizeof(BinaryDataHeader) + 20);
-    BinaryDataHeader* header = reinterpret_cast<BinaryDataHeader*>(test_data->data());
-    
-    header->magic_number = BINARY_DATA_MAGIC_NUMBER;
-    header->sequence_number = 1;
-    header->format_version = FORMAT_VERSION_EVENTDATA;
-    header->header_size = BINARY_DATA_HEADER_SIZE;
-    header->event_count = 0;
-    header->uncompressed_size = 10;
-    header->compressed_size = 20;  // Larger than uncompressed (invalid)
-    header->checksum = 0;
-    header->compression_type = COMPRESSION_LZ4;  // LZ4 enabled
-    header->checksum_type = CHECKSUM_NONE;
-    header->timestamp = 123456789;
-    
-    processor->EnableCompression(true);
-    processor->EnableChecksum(false);
-    
-    // This should fail because we have invalid LZ4 data
-    auto result = processor->Decode(test_data);
-    EXPECT_EQ(result.first, nullptr);  // Should fail due to invalid LZ4 data
-    EXPECT_EQ(result.second, 0);
-}
-
-TEST_F(DecodePipelineTest, DecodeSkipsDecompressionWhenDisabled) {
-    // Create uncompressed data
-    auto test_data = std::make_unique<std::vector<uint8_t>>(sizeof(BinaryDataHeader));
-    BinaryDataHeader* header = reinterpret_cast<BinaryDataHeader*>(test_data->data());
-    
-    header->magic_number = BINARY_DATA_MAGIC_NUMBER;
-    header->sequence_number = 1;
-    header->format_version = FORMAT_VERSION_EVENTDATA;
-    header->header_size = BINARY_DATA_HEADER_SIZE;
-    header->event_count = 0;  // Empty payload
-    header->uncompressed_size = 0;
-    header->compressed_size = 0;
-    header->checksum = 0;
-    header->compression_type = COMPRESSION_NONE;  // No compression
-    header->checksum_type = CHECKSUM_NONE;
-    header->timestamp = 123456789;
-    
-    processor->EnableCompression(false);
-    processor->EnableChecksum(false);
-    
-    auto result = processor->Decode(test_data);
-    EXPECT_NE(result.first, nullptr);  // Should succeed
-    EXPECT_EQ(result.second, 1);  // Should return sequence number
-    EXPECT_EQ(result.first->size(), 0);  // Empty event list
-}
-
-// Phase 7.1.4: Deserialization to EventData tests (TDD RED phase)
+// Phase 7.1.4: Deserialization to EventData tests
 TEST_F(DecodePipelineTest, DecodeBasicRoundTripEventData) {
     // This is a comprehensive test that will only pass once full Decode is implemented
     auto original_events = CreateTestEventData(2);
     uint64_t sequence_number = 42;
-    
-    processor->EnableCompression(false);  // Disable for simpler testing
+
     processor->EnableChecksum(false);
-    
+
     // Encode first
     auto encoded_data = processor->Process(original_events, sequence_number);
     ASSERT_NE(encoded_data, nullptr);
-    
+
     // Decode back
     auto result = processor->Decode(encoded_data);
-    
+
     EXPECT_NE(result.first, nullptr);
     EXPECT_EQ(result.second, sequence_number);
-    
+
     if (result.first) {
         EXPECT_EQ(result.first->size(), 2);
-        
+
         // Verify first event data matches
         if (result.first->size() > 0) {
             const auto& decoded_event = (*result.first)[0];
@@ -1061,11 +831,10 @@ TEST_F(DecodePipelineTest, DecodeBasicRoundTripEventData) {
     }
 }
 
-TEST_F(DecodePipelineTest, DecodeRoundTripEventDataWithCompressionAndChecksum) {
+TEST_F(DecodePipelineTest, DecodeRoundTripEventDataWithChecksum) {
     auto original_events = CreateTestEventData(1);
     uint64_t sequence_number = 123;
-    
-    processor->EnableCompression(true);   // Enable compression
+
     processor->EnableChecksum(true);      // Enable checksum
     
     // Encode first
@@ -1095,23 +864,22 @@ TEST_F(DecodePipelineTest, DecodeMinimalHandlesNullInput) {
 TEST_F(DecodePipelineTest, DecodeMinimalBasicRoundTrip) {
     auto original_events = CreateTestMinimalEventData(3);
     uint64_t sequence_number = 456;
-    
-    processor->EnableCompression(false);
+
     processor->EnableChecksum(false);
-    
+
     // Encode first
     auto encoded_data = processor->Process(original_events, sequence_number);
     ASSERT_NE(encoded_data, nullptr);
-    
+
     // Decode back
     auto result = processor->DecodeMinimal(encoded_data);
-    
+
     EXPECT_NE(result.first, nullptr);
     EXPECT_EQ(result.second, sequence_number);
-    
+
     if (result.first) {
         EXPECT_EQ(result.first->size(), 3);
-        
+
         // Verify first event data matches
         if (result.first->size() > 0) {
             const auto& decoded_event = (*result.first)[0];
@@ -1125,23 +893,22 @@ TEST_F(DecodePipelineTest, DecodeMinimalBasicRoundTrip) {
     }
 }
 
-TEST_F(DecodePipelineTest, DecodeMinimalWithCompressionAndChecksum) {
+TEST_F(DecodePipelineTest, DecodeMinimalWithChecksum) {
     auto original_events = CreateTestMinimalEventData(2);
     uint64_t sequence_number = 789;
-    
-    processor->EnableCompression(true);
+
     processor->EnableChecksum(true);
-    
+
     // Encode first
     auto encoded_data = processor->Process(original_events, sequence_number);
     ASSERT_NE(encoded_data, nullptr);
-    
+
     // Decode back
     auto result = processor->DecodeMinimal(encoded_data);
-    
+
     EXPECT_NE(result.first, nullptr);
     EXPECT_EQ(result.second, sequence_number);
-    
+
     if (result.first) {
         EXPECT_EQ(result.first->size(), 2);
     }
@@ -1161,17 +928,16 @@ TEST_F(DecodePipelineTest, DecodeHandlesCorruptedData) {
 TEST_F(DecodePipelineTest, DecodeHandlesTruncatedData) {
     // Create valid data but truncate it
     auto original_events = CreateTestEventData(1);
-    
-    processor->EnableCompression(false);
+
     processor->EnableChecksum(false);
-    
+
     auto encoded_data = processor->Process(original_events, 1);
     ASSERT_NE(encoded_data, nullptr);
-    
+
     // Truncate the data
     auto truncated_data = std::make_unique<std::vector<uint8_t>>(
         encoded_data->begin(), encoded_data->begin() + encoded_data->size() / 2);
-    
+
     auto result = processor->Decode(truncated_data);
     EXPECT_EQ(result.first, nullptr);  // Should fail due to truncation
     EXPECT_EQ(result.second, 0);
@@ -1181,7 +947,7 @@ TEST_F(DecodePipelineTest, DecodeHandlesPayloadSizeMismatch) {
     // Create header that claims different payload size
     auto test_data = std::make_unique<std::vector<uint8_t>>(sizeof(BinaryDataHeader) + 50);
     BinaryDataHeader* header = reinterpret_cast<BinaryDataHeader*>(test_data->data());
-    
+
     header->magic_number = BINARY_DATA_MAGIC_NUMBER;
     header->sequence_number = 1;
     header->format_version = FORMAT_VERSION_EVENTDATA;
@@ -1193,10 +959,9 @@ TEST_F(DecodePipelineTest, DecodeHandlesPayloadSizeMismatch) {
     header->compression_type = COMPRESSION_NONE;
     header->checksum_type = CHECKSUM_NONE;
     header->timestamp = 123456789;
-    
-    processor->EnableCompression(false);
+
     processor->EnableChecksum(false);
-    
+
     auto result = processor->Decode(test_data);
     EXPECT_EQ(result.first, nullptr);  // Should fail due to size mismatch
     EXPECT_EQ(result.second, 0);

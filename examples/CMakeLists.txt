@@ -46,38 +46,9 @@ if(NOT ZMQ_FOUND)
     endif()
 endif()
 
-# Find LZ4
-pkg_check_modules(LZ4 liblz4)
-if(LZ4_FOUND AND NOT LZ4_LIBRARIES MATCHES "^/")
-    # pkg-config found it but only gave library name, find full path
-    find_library(LZ4_FULL_PATH
-        NAMES ${LZ4_LIBRARIES}
-        PATHS ${LZ4_LIBRARY_DIRS} /opt/homebrew/lib /usr/local/lib /usr/lib
-    )
-    if(LZ4_FULL_PATH)
-        set(LZ4_LIBRARIES ${LZ4_FULL_PATH})
-    endif()
-endif()
-if(NOT LZ4_FOUND)
-    find_path(LZ4_INCLUDE_DIRS lz4.h
-        PATHS /opt/homebrew/include /usr/local/include /usr/include
-    )
-    find_library(LZ4_LIBRARIES
-        NAMES lz4
-        PATHS /opt/homebrew/lib /usr/local/lib /usr/lib
-    )
-    if(LZ4_INCLUDE_DIRS AND LZ4_LIBRARIES)
-        set(LZ4_FOUND TRUE)
-    endif()
-endif()
-
-
 # Verify all dependencies are found
 if(NOT ZMQ_FOUND)
     message(FATAL_ERROR "ZeroMQ not found. Please install libzmq.")
-endif()
-if(NOT LZ4_FOUND)
-    message(FATAL_ERROR "LZ4 not found. Please install liblz4.")
 endif()
 
 # Optional: Find CAEN FELib if you want to build digitizer examples
@@ -89,16 +60,14 @@ find_library(CAEN_FELIB CAEN_FELib)
 
 # Example 1: Basic library usage
 add_executable(basic_example basic_example.cpp)
-target_link_libraries(basic_example 
-    PRIVATE 
+target_link_libraries(basic_example
+    PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
 )
 target_include_directories(basic_example
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
 )
 
 # Example 2: Data + Command communication with new byte-based interface
@@ -108,26 +77,22 @@ target_include_directories(basic_example
 #     PRIVATE
 #         ${DELILA_TARGET}
 #         ${ZMQ_LIBRARIES}
-#         ${LZ4_LIBRARIES}
 # )
 # target_include_directories(data_command_example
 #     PRIVATE
 #         ${ZMQ_INCLUDE_DIRS}
-#         ${LZ4_INCLUDE_DIRS}
 # )
 
 # Example 3: Separated serialization demonstration
 add_executable(separated_serialization separated_serialization.cpp)
-target_link_libraries(separated_serialization 
-    PRIVATE 
+target_link_libraries(separated_serialization
+    PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
 )
 target_include_directories(separated_serialization
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
 )
 
 # Example 4: MinimalEventData usage
@@ -136,12 +101,10 @@ target_link_libraries(minimal_event_data_example
     PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
 )
 target_include_directories(minimal_event_data_example
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
 )
 
 # Example 5: Simple digitizer test (requires CAEN hardware)
@@ -150,12 +113,10 @@ target_link_libraries(simple_digitizer_test
     PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
 )
 target_include_directories(simple_digitizer_test
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
 )
 
 # Example 6: Digitizer2 basic example (requires CAEN Digitizer 2 hardware)
@@ -164,12 +125,10 @@ target_link_libraries(digitizer2_basic_example
     PRIVATE
         ${DELILA_TARGET}
         ${ZMQ_LIBRARIES}
-        ${LZ4_LIBRARIES}
 )
 target_include_directories(digitizer2_basic_example
     PRIVATE
         ${ZMQ_INCLUDE_DIRS}
-        ${LZ4_INCLUDE_DIRS}
 )
 
 # ============================================================================
@@ -216,11 +175,6 @@ message(STATUS "  ZMQ: ${ZMQ_FOUND}")
 if(ZMQ_FOUND)
     message(STATUS "    - Library: ${ZMQ_LIBRARIES}")
     message(STATUS "    - Include: ${ZMQ_INCLUDE_DIRS}")
-endif()
-message(STATUS "  LZ4: ${LZ4_FOUND}")
-if(LZ4_FOUND)
-    message(STATUS "    - Library: ${LZ4_LIBRARIES}")
-    message(STATUS "    - Include: ${LZ4_INCLUDE_DIRS}")
 endif()
 message(STATUS "  CAEN FELib: ${CAEN_FELIB}")
 message(STATUS "")

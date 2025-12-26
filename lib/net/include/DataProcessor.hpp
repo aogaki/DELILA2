@@ -43,9 +43,8 @@ constexpr uint32_t FORMAT_VERSION_EVENTDATA =
 constexpr uint32_t FORMAT_VERSION_MINIMAL_EVENTDATA =
     2;  // MinimalEventData (22 bytes)
 
-// Compression type constants
+// Compression type constants (LZ4 removed - not used)
 constexpr uint8_t COMPRESSION_NONE = 0;
-constexpr uint8_t COMPRESSION_LZ4 = 1;
 
 // Checksum type constants
 constexpr uint8_t CHECKSUM_NONE = 0;
@@ -58,9 +57,7 @@ class DataProcessor
   ~DataProcessor() = default;
 
   // Configuration methods
-  void EnableCompression(bool enable = true) { compression_enabled_ = enable; }
   void EnableChecksum(bool enable = true) { checksum_enabled_ = enable; }
-  bool IsCompressionEnabled() const { return compression_enabled_; }
   bool IsChecksumEnabled() const { return checksum_enabled_; }
 
   // Main processing methods
@@ -94,8 +91,7 @@ class DataProcessor
           &events);
 
  private:
-  bool compression_enabled_ = true;  // Default: LZ4 compression ON
-  bool checksum_enabled_ = true;     // Default: CRC32 checksum ON
+  bool checksum_enabled_ = true;  // Default: CRC32 checksum ON
 
   // Sequence counter for auto-sequence processing
   std::atomic<uint64_t> sequence_counter_{0};
@@ -113,13 +109,6 @@ class DataProcessor
 
   std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
   DeserializeMinimal(const std::unique_ptr<std::vector<uint8_t>> &data);
-
-  // Compression methods
-  std::unique_ptr<std::vector<uint8_t>> CompressLZ4(
-      const std::unique_ptr<std::vector<uint8_t>> &data);
-
-  std::unique_ptr<std::vector<uint8_t>> DecompressLZ4(
-      const std::unique_ptr<std::vector<uint8_t>> &data, size_t original_size);
 
  public:
   // CRC32 methods (static for efficiency) - public for testing

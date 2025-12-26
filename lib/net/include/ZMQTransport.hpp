@@ -12,12 +12,17 @@
 #include <memory>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <queue>
 #include <sstream>
 #include <string>
 #include <variant>
 #include <vector>
 #include <zmq.hpp>
+
+#include "../../core/include/delila/core/Command.hpp"
+#include "../../core/include/delila/core/CommandResponse.hpp"
+#include "../../core/include/delila/core/ComponentState.hpp"
 
 // Forward declarations
 namespace DELILA::Digitizer
@@ -130,6 +135,17 @@ class ZMQTransport
   bool SendStatus(const ComponentStatus &status);
   std::unique_ptr<ComponentStatus> ReceiveStatus();
 
+  // Command functions (REQ/REP pattern)
+  // For Operator side (REQ) - send command and wait for response
+  std::optional<DELILA::CommandResponse> SendCommand(
+      const DELILA::Command &cmd,
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
+
+  // For Component side (REP) - receive command and send response
+  std::optional<DELILA::Command> ReceiveCommand(
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
+  bool SendCommandResponse(const DELILA::CommandResponse &response);
+
  private:
   bool fConnected = false;
   bool fConfigured = false;
@@ -137,12 +153,21 @@ class ZMQTransport
 
   // ZeroMQ context and sockets (KISS - byte transport only)
   std::unique_ptr<zmq::context_t> fContext;
-  std::unique_ptr<zmq::socket_t> fDataSocket;    // Data socket
-  std::unique_ptr<zmq::socket_t> fStatusSocket;  // For status communication
+  std::unique_ptr<zmq::socket_t> fDataSocket;     // Data socket
+  std::unique_ptr<zmq::socket_t> fStatusSocket;   // For status communication
+  std::unique_ptr<zmq::socket_t> fCommandSocket;  // For command REQ/REP
 
   // Helper methods for JSON status serialization
   std::string SerializeStatus(const ComponentStatus &status) const;
   std::unique_ptr<ComponentStatus> DeserializeStatus(
+      const std::string &json) const;
+
+  // Helper methods for JSON command serialization
+  std::string SerializeCommand(const DELILA::Command &cmd) const;
+  std::optional<DELILA::Command> DeserializeCommand(const std::string &json) const;
+  std::string SerializeCommandResponse(
+      const DELILA::CommandResponse &response) const;
+  std::optional<DELILA::CommandResponse> DeserializeCommandResponse(
       const std::string &json) const;
 };
 

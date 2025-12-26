@@ -69,6 +69,10 @@ protected:
         config.bind_data = true;
         config.data_pattern = "PUB";
         config.is_publisher = true;
+        // Disable status socket by setting same address as data
+        config.status_address = config.data_address;
+        // Disable command socket
+        config.command_address = "";
         return config;
     }
 
@@ -78,6 +82,10 @@ protected:
         config.bind_data = false;  // Subscriber connects to publisher
         config.data_pattern = "SUB";
         config.is_publisher = false;
+        // Disable status socket by setting same address as data
+        config.status_address = config.data_address;
+        // Disable command socket
+        config.command_address = "";
         return config;
     }
 
@@ -227,11 +235,17 @@ TEST_F(ZMQTransportBytesTest, PairPatternBidirectional) {
     config1.data_address = address;
     config1.bind_data = true;
     config1.data_pattern = "PAIR";
-    
+    // Disable status and command sockets
+    config1.status_address = config1.data_address;
+    config1.command_address = "";
+
     TransportConfig config2;
     config2.data_address = address;
     config2.bind_data = false;
     config2.data_pattern = "PAIR";
+    // Disable status and command sockets
+    config2.status_address = config2.data_address;
+    config2.command_address = "";
     
     // Connect transport1 first (binder)
     ASSERT_TRUE(transport1->Configure(config1));

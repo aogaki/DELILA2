@@ -93,12 +93,16 @@ protected:
         config.data_pattern = pattern;
         config.bind_data = bind;
         config.is_publisher = (pattern == "PUB");
-        
+        // Disable status socket by setting same address as data
+        config.status_address = config.data_address;
+        // Disable command socket
+        config.command_address = "";
+
         ASSERT_TRUE(transport.Configure(config));
-        
+
         // For reliable connection, bind first, then connect with delay
         ASSERT_TRUE(transport.Connect());
-        
+
         // Additional delay for socket setup, especially important for integration tests
         if (bind) {
             std::this_thread::sleep_for(200ms);  // Binder needs time to be ready
@@ -201,17 +205,17 @@ TEST_F(ByteTransportReliabilityTest, MinimalEventData_Transport_Reliability) {
     auto received_bytes = receiver.ReceiveBytes();
     ASSERT_TRUE(received_bytes);
     
-    auto [received_events, sequence_number] = receiver_processor.Decode(received_bytes);
-    
+    auto [received_events, sequence_number] = receiver_processor.DecodeMinimal(received_bytes);
+
     ASSERT_TRUE(received_events);
     EXPECT_EQ(received_events->size(), 15);
     EXPECT_EQ(sequence_number, test_sequence);
-    
+
     // Verify data integrity
     for (size_t i = 0; i < received_events->size(); ++i) {
         const auto& received = (*received_events)[i];
         const auto& original = original_copies[i];
-        
+
         EXPECT_EQ(received->module, original.module);
         EXPECT_EQ(received->channel, original.channel);
         EXPECT_DOUBLE_EQ(received->timeStampNs, original.timeStampNs);
@@ -240,17 +244,19 @@ TEST_F(ByteTransportReliabilityTest, Large_Dataset_Transport) {
     uint64_t test_sequence = 999;
     auto serialized_bytes = sender_processor.Process(original_events, test_sequence);
     ASSERT_TRUE(serialized_bytes);
-    EXPECT_GT(serialized_bytes->size(), 10000); // Should be substantial size
-    
+    size_t expected_size = serialized_bytes->size();
+    EXPECT_GT(expected_size, 10000); // Should be substantial size
+
     ASSERT_TRUE(sender.SendBytes(serialized_bytes));
-    
+    // Note: serialized_bytes is now nullptr after SendBytes
+
     // Give more time for large data delivery
     std::this_thread::sleep_for(200ms);
-    
+
     // Receive and decode
     auto received_bytes = receiver.ReceiveBytes();
     ASSERT_TRUE(received_bytes);
-    EXPECT_EQ(received_bytes->size(), serialized_bytes->size());
+    EXPECT_EQ(received_bytes->size(), expected_size);
     
     auto [received_events, sequence_number] = receiver_processor.Decode(received_bytes);
     

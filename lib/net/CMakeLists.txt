@@ -40,94 +40,22 @@ target_include_directories(delila_net
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include>
         $<INSTALL_INTERFACE:include>
-        ${LZ4_INCLUDE_DIRS}
         ${ZMQ_INCLUDE_DIRS}
 )
 
-# Link LZ4 and ZeroMQ libraries
+# Link ZeroMQ library
 target_link_libraries(delila_net
     PUBLIC
-        ${LZ4_LIBRARIES}
         ${ZMQ_LIBRARIES}
 )
 
 # Find GTest
 find_package(GTest REQUIRED)
 
-# Create test executable
-# TODO: test_serializer.cpp is missing
-# add_executable(test_serializer test_serializer.cpp)
-# target_link_libraries(test_serializer 
-#     delila_net
-#     delila_digitizer
-#     GTest::gtest
-#     GTest::gtest_main
-#     ${LZ4_LIBRARIES}
-#     ${XXHASH_LIBRARIES}
-# )
-# target_include_directories(test_serializer PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
-# )
-
-# Create ZMQ transport test executable
-# TODO: test_zmq_transport.cpp is missing
-# add_executable(test_zmq_transport test_zmq_transport.cpp)
-# target_link_libraries(test_zmq_transport 
-#     delila_net
-#     delila_digitizer
-#     GTest::gtest
-#     GTest::gtest_main
-#     ${LZ4_LIBRARIES}
-#     ${XXHASH_LIBRARIES}
-#     ${ZMQ_LIBRARIES}
-# )
-# target_include_directories(test_zmq_transport PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
-#     ${ZMQ_INCLUDE_DIRS}
-# )
-
-# Create simple pattern test executable (no digitizer dependency)
-# TODO: test_patterns_only.cpp is missing
-# add_executable(test_patterns_only test_patterns_only.cpp)
-
-# Create Phase 1 integration test executable
-# NOTE: Commented out until test file is created
-# add_executable(test_zmq_transport_phase1_integration test_zmq_transport_phase1_integration.cpp)
-# target_link_libraries(test_zmq_transport_phase1_integration 
-#     delila_net
-#     delila_digitizer
-#     GTest::gtest
-#     GTest::gtest_main
-#     ${LZ4_LIBRARIES}
-#     ${XXHASH_LIBRARIES}
-#     ${ZMQ_LIBRARIES}
-# )
-# target_include_directories(test_zmq_transport_phase1_integration PRIVATE
-#     ${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include
-#     ${ZMQ_INCLUDE_DIRS}
-# )
-
-# target_link_libraries(test_patterns_only 
-#     delila_net
-#     GTest::gtest
-#     GTest::gtest_main
-#     ${LZ4_LIBRARIES}
-#     ${XXHASH_LIBRARIES}
-#     ${ZMQ_LIBRARIES}
-# )
-# target_include_directories(test_patterns_only PRIVATE
-#     ${ZMQ_INCLUDE_DIRS}
-# )
-
 # Enable testing if requested
 option(BUILD_TESTS "Build tests" ON)
 if(BUILD_TESTS)
     enable_testing()
-    # TODO: Uncomment when test files exist
-    # add_test(NAME test_serializer COMMAND test_serializer)
-    # add_test(NAME test_zmq_transport COMMAND test_zmq_transport)
-    # add_test(NAME test_patterns_only COMMAND test_patterns_only)
-    add_test(NAME test_zmq_transport_phase1_integration COMMAND test_zmq_transport_phase1_integration)
 endif()
 
 # Add examples subdirectory

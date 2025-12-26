@@ -1,7 +1,5 @@
 #include "../include/DataProcessor.hpp"
 
-#include <lz4.h>
-
 #include <chrono>
 #include <cstring>
 #include <stdexcept>
@@ -69,9 +67,8 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
 
-  // Set compression and checksum types based on enabled flags
-  header.compression_type =
-      compression_enabled_ ? COMPRESSION_LZ4 : COMPRESSION_NONE;
+  // Compression is disabled - always NONE
+  header.compression_type = COMPRESSION_NONE;
   header.checksum_type = checksum_enabled_ ? CHECKSUM_CRC32 : CHECKSUM_NONE;
 
   // Serialize event data
@@ -81,26 +78,12 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
   }
 
   header.uncompressed_size = serializedData->size();
-
-  // Optionally compress data
-  std::unique_ptr<std::vector<uint8_t>> *dataToEncode = &serializedData;
-  std::unique_ptr<std::vector<uint8_t>> compressedData;
-  if (compression_enabled_ && !serializedData->empty()) {
-    compressedData = CompressLZ4(serializedData);
-    if (compressedData && compressedData->size() < serializedData->size()) {
-      dataToEncode = &compressedData;
-      header.compressed_size = compressedData->size();
-    } else {
-      header.compressed_size = header.uncompressed_size;
-    }
-  } else {
-    header.compressed_size = header.uncompressed_size;
-  }
+  header.compressed_size = serializedData->size();  // No compression
 
   // Calculate checksum if enabled
-  if (checksum_enabled_ && *dataToEncode) {
+  if (checksum_enabled_) {
     header.checksum =
-        CalculateCRC32((*dataToEncode)->data(), (*dataToEncode)->size());
+        CalculateCRC32(serializedData->data(), serializedData->size());
   } else {
     header.checksum = 0;
   }
@@ -110,17 +93,16 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
 
   // Create final output
   auto result = std::make_unique<std::vector<uint8_t>>();
-  result->reserve(sizeof(header) +
-                  (*dataToEncode ? (*dataToEncode)->size() : 0));
+  result->reserve(sizeof(header) + serializedData->size());
 
   // Write header
   const uint8_t *headerBytes = reinterpret_cast<const uint8_t *>(&header);
   result->insert(result->end(), headerBytes, headerBytes + sizeof(header));
 
   // Write data
-  if (*dataToEncode && !(*dataToEncode)->empty()) {
-    result->insert(result->end(), (*dataToEncode)->begin(),
-                   (*dataToEncode)->end());
+  if (!serializedData->empty()) {
+    result->insert(result->end(), serializedData->begin(),
+                   serializedData->end());
   }
 
   return result;
@@ -146,9 +128,8 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
 
-  // Set compression and checksum types based on enabled flags
-  header.compression_type =
-      compression_enabled_ ? COMPRESSION_LZ4 : COMPRESSION_NONE;
+  // Compression is disabled - always NONE
+  header.compression_type = COMPRESSION_NONE;
   header.checksum_type = checksum_enabled_ ? CHECKSUM_CRC32 : CHECKSUM_NONE;
 
   // Serialize event data
@@ -158,26 +139,12 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
   }
 
   header.uncompressed_size = serializedData->size();
-
-  // Optionally compress data
-  std::unique_ptr<std::vector<uint8_t>> *dataToEncode = &serializedData;
-  std::unique_ptr<std::vector<uint8_t>> compressedData;
-  if (compression_enabled_ && !serializedData->empty()) {
-    compressedData = CompressLZ4(serializedData);
-    if (compressedData && compressedData->size() < serializedData->size()) {
-      dataToEncode = &compressedData;
-      header.compressed_size = compressedData->size();
-    } else {
-      header.compressed_size = header.uncompressed_size;
-    }
-  } else {
-    header.compressed_size = header.uncompressed_size;
-  }
+  header.compressed_size = serializedData->size();  // No compression
 
   // Calculate checksum if enabled
-  if (checksum_enabled_ && *dataToEncode) {
+  if (checksum_enabled_) {
     header.checksum =
-        CalculateCRC32((*dataToEncode)->data(), (*dataToEncode)->size());
+        CalculateCRC32(serializedData->data(), serializedData->size());
   } else {
     header.checksum = 0;
   }
@@ -187,17 +154,16 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
 
   // Create final output
   auto result = std::make_unique<std::vector<uint8_t>>();
-  result->reserve(sizeof(header) +
-                  (*dataToEncode ? (*dataToEncode)->size() : 0));
+  result->reserve(sizeof(header) + serializedData->size());
 
   // Write header
   const uint8_t *headerBytes = reinterpret_cast<const uint8_t *>(&header);
   result->insert(result->end(), headerBytes, headerBytes + sizeof(header));
 
   // Write data
-  if (*dataToEncode && !(*dataToEncode)->empty()) {
-    result->insert(result->end(), (*dataToEncode)->begin(),
-                   (*dataToEncode)->end());
+  if (!serializedData->empty()) {
+    result->insert(result->end(), serializedData->begin(),
+                   serializedData->end());
   }
 
   return result;
@@ -206,7 +172,6 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
 std::pair<std::unique_ptr<std::vector<std::unique_ptr<EventData>>>, uint64_t>
 DataProcessor::Decode(const std::unique_ptr<std::vector<uint8_t>> &data)
 {
-  // Phase 7.1.1: Header parsing/validation
   // Handle null/empty input
   if (!data || data->empty()) {
     return {nullptr, 0};
@@ -239,35 +204,24 @@ DataProcessor::Decode(const std::unique_ptr<std::vector<uint8_t>> &data)
   // Extract sequence number
   uint64_t sequence_number = header->sequence_number;
 
-  // Get payload (after header)
-  if (data->size() < sizeof(BinaryDataHeader) + header->compressed_size) {
+  // Get payload (after header) - no compression, use uncompressed_size
+  if (data->size() < sizeof(BinaryDataHeader) + header->uncompressed_size) {
     return {nullptr, 0};  // Size mismatch
   }
 
   auto payload = std::make_unique<std::vector<uint8_t>>(
       data->begin() + sizeof(BinaryDataHeader),
-      data->begin() + sizeof(BinaryDataHeader) + header->compressed_size);
+      data->begin() + sizeof(BinaryDataHeader) + header->uncompressed_size);
 
-  // Phase 7.1.2: CRC32 verification (conditional)
+  // CRC32 verification (conditional)
   if (checksum_enabled_ && header->checksum_type == CHECKSUM_CRC32) {
     if (!VerifyCRC32(payload->data(), payload->size(), header->checksum)) {
       return {nullptr, 0};  // Checksum verification failed
     }
   }
 
-  // Phase 7.1.3: LZ4 decompression (conditional)
-  std::unique_ptr<std::vector<uint8_t>> uncompressed_payload;
-  if (compression_enabled_ && header->compression_type == COMPRESSION_LZ4) {
-    uncompressed_payload = DecompressLZ4(payload, header->uncompressed_size);
-    if (!uncompressed_payload) {
-      return {nullptr, 0};  // Decompression failed
-    }
-  } else {
-    uncompressed_payload = std::move(payload);
-  }
-
-  // Phase 7.1.4: Deserialization to EventData
-  auto events = Deserialize(uncompressed_payload);
+  // Deserialization to EventData
+  auto events = Deserialize(payload);
   if (!events) {
     return {nullptr, 0};  // Deserialization failed
   }
@@ -279,7 +233,6 @@ std::pair<std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>,
           uint64_t>
 DataProcessor::DecodeMinimal(const std::unique_ptr<std::vector<uint8_t>> &data)
 {
-  // Phase 7.2: DecodeMinimal - same pipeline as Decode but deserialize to MinimalEventData
   // Handle null/empty input
   if (!data || data->empty()) {
     return {nullptr, 0};
@@ -313,14 +266,14 @@ DataProcessor::DecodeMinimal(const std::unique_ptr<std::vector<uint8_t>> &data)
   // Extract sequence number
   uint64_t sequence_number = header->sequence_number;
 
-  // Get payload (after header)
-  if (data->size() < sizeof(BinaryDataHeader) + header->compressed_size) {
+  // Get payload (after header) - no compression, use uncompressed_size
+  if (data->size() < sizeof(BinaryDataHeader) + header->uncompressed_size) {
     return {nullptr, 0};  // Size mismatch
   }
 
   auto payload = std::make_unique<std::vector<uint8_t>>(
       data->begin() + sizeof(BinaryDataHeader),
-      data->begin() + sizeof(BinaryDataHeader) + header->compressed_size);
+      data->begin() + sizeof(BinaryDataHeader) + header->uncompressed_size);
 
   // CRC32 verification (conditional)
   if (checksum_enabled_ && header->checksum_type == CHECKSUM_CRC32) {
@@ -329,19 +282,8 @@ DataProcessor::DecodeMinimal(const std::unique_ptr<std::vector<uint8_t>> &data)
     }
   }
 
-  // LZ4 decompression (conditional)
-  std::unique_ptr<std::vector<uint8_t>> uncompressed_payload;
-  if (compression_enabled_ && header->compression_type == COMPRESSION_LZ4) {
-    uncompressed_payload = DecompressLZ4(payload, header->uncompressed_size);
-    if (!uncompressed_payload) {
-      return {nullptr, 0};  // Decompression failed
-    }
-  } else {
-    uncompressed_payload = std::move(payload);
-  }
-
   // Deserialization to MinimalEventData
-  auto events = DeserializeMinimal(uncompressed_payload);
+  auto events = DeserializeMinimal(payload);
   if (!events) {
     return {nullptr, 0};  // Deserialization failed
   }
@@ -606,65 +548,6 @@ DataProcessor::DeserializeMinimal(
   }
 
   return events;
-}
-
-std::unique_ptr<std::vector<uint8_t>> DataProcessor::CompressLZ4(
-    const std::unique_ptr<std::vector<uint8_t>> &data)
-{
-  if (!data || data->empty()) {
-    return nullptr;
-  }
-
-  const int srcSize = static_cast<int>(data->size());
-  const int maxCompressedSize = LZ4_compressBound(srcSize);
-
-  auto compressed =
-      std::make_unique<std::vector<uint8_t>>();  // No buffer pool (KISS)
-  compressed->resize(maxCompressedSize);
-
-  const int compressedSize = LZ4_compress_default(
-      reinterpret_cast<const char *>(data->data()),
-      reinterpret_cast<char *>(compressed->data()), srcSize, maxCompressedSize);
-
-  if (compressedSize <= 0) {
-    // Compression failed
-    return nullptr;
-  }
-
-  // Resize to actual compressed size
-  compressed->resize(compressedSize);
-
-  // Only return compressed data if it's actually smaller
-  if (static_cast<size_t>(compressedSize) < data->size()) {
-    return compressed;
-  }
-
-  // If compression didn't save space, return nullptr (caller can use original)
-  return nullptr;
-}
-
-std::unique_ptr<std::vector<uint8_t>> DataProcessor::DecompressLZ4(
-    const std::unique_ptr<std::vector<uint8_t>> &data, size_t original_size)
-{
-  if (!data || data->empty() || original_size == 0) {
-    return nullptr;
-  }
-
-  auto decompressed =
-      std::make_unique<std::vector<uint8_t>>();  // No buffer pool (KISS)
-  decompressed->resize(original_size);
-
-  const int result = LZ4_decompress_safe(
-      reinterpret_cast<const char *>(data->data()),
-      reinterpret_cast<char *>(decompressed->data()),
-      static_cast<int>(data->size()), static_cast<int>(original_size));
-
-  if (result > 0 && static_cast<size_t>(result) == original_size) {
-    return decompressed;
-  }
-
-  // Decompression failed or size mismatch
-  return nullptr;
 }
 
 // Sequence number management
