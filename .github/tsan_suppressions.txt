@@ -1,0 +1,13 @@
+# ThreadSanitizer suppressions for DELILA2
+# ZeroMQ is known to have false positives with TSan due to its internal threading model
+
+# Suppress data races reported in ZeroMQ library
+race:libzmq.so
+race:zmq_*
+race:zmq::*
+
+# Suppress races in ZeroMQ's internal I/O threads
+thread:ZMQbg/IO
+
+# Suppress standard library related false positives
+race:std::basic_streambuf

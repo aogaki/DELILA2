@@ -1,4 +1,6 @@
 #include <benchmark/benchmark.h>
+#include <memory>
+#include <vector>
 #include "../../include/delila/core/MinimalEventData.hpp"
 #include "../../include/delila/core/EventData.hpp"
 
