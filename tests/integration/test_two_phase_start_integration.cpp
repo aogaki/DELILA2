@@ -14,9 +14,9 @@
 #include <thread>
 #include <vector>
 
-#include "ComponentState.hpp"
 #include "TwoPhaseStartManager.hpp"
 
+using namespace DELILA;
 using namespace DELILA::Net;
 
 /**
@@ -188,7 +188,7 @@ TEST_F(TwoPhaseStartIntegrationTest, StopAllowsNewCycle)
 // Test: TwoPhaseStartManager state tracking
 TEST_F(TwoPhaseStartIntegrationTest, ManagerTracksState)
 {
-    EXPECT_EQ(manager_.GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_.GetState(), ComponentState::Idle);
 
     // Configure
     EXPECT_EQ(manager_.Configure(), TwoPhaseStartManager::Result::Success);
@@ -206,7 +206,7 @@ TEST_F(TwoPhaseStartIntegrationTest, ManagerTracksState)
 
     // Stop
     EXPECT_EQ(manager_.Stop(), TwoPhaseStartManager::Result::Success);
-    EXPECT_EQ(manager_.GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_.GetState(), ComponentState::Idle);
 }
 
 // Test: Manager prevents invalid state transitions
