@@ -107,6 +107,7 @@ Idle → Configuring → Configured → Arming → Armed → Starting → Runnin
 | [02_INTERFACE_DESIGN.md](02_INTERFACE_DESIGN.md) | インターフェース設計 | 完了 |
 | [03_IMPLEMENTATION_PLAN.md](03_IMPLEMENTATION_PLAN.md) | 実装計画 | Phase 5完了時点で更新 |
 | [04_TEST_STRATEGY.md](04_TEST_STRATEGY.md) | テスト戦略 | 完了 |
+| [05_REMAINING_TASKS.md](05_REMAINING_TASKS.md) | 残タスク一覧 | 新規追加 |
 
 ## 関連ドキュメント
 
