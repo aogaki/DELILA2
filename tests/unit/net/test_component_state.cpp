@@ -5,82 +5,113 @@
 
 #include <gtest/gtest.h>
 
-#include "ComponentState.hpp"
+#include <delila/core/ComponentState.hpp>
 
-using namespace DELILA::Net;
+using namespace DELILA;
 
 TEST(ComponentStateTest, StateToStringConversion)
 {
-    EXPECT_EQ(ComponentStateToString(ComponentState::Loaded), "Loaded");
+    EXPECT_EQ(ComponentStateToString(ComponentState::Idle), "Idle");
+    EXPECT_EQ(ComponentStateToString(ComponentState::Configuring), "Configuring");
     EXPECT_EQ(ComponentStateToString(ComponentState::Configured), "Configured");
+    EXPECT_EQ(ComponentStateToString(ComponentState::Arming), "Arming");
     EXPECT_EQ(ComponentStateToString(ComponentState::Armed), "Armed");
+    EXPECT_EQ(ComponentStateToString(ComponentState::Starting), "Starting");
     EXPECT_EQ(ComponentStateToString(ComponentState::Running), "Running");
-    EXPECT_EQ(ComponentStateToString(ComponentState::Paused), "Paused");
+    EXPECT_EQ(ComponentStateToString(ComponentState::Stopping), "Stopping");
     EXPECT_EQ(ComponentStateToString(ComponentState::Error), "Error");
 }
 
-TEST(ComponentStateTest, ValidTransitionLoadedToConfigure)
+TEST(ComponentStateTest, ValidTransitionIdleToConfiguring)
 {
-    EXPECT_TRUE(IsValidTransition(ComponentState::Loaded, ComponentState::Configured));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Idle, ComponentState::Configuring));
 }
 
-TEST(ComponentStateTest, ValidTransitionConfiguredToArmed)
+TEST(ComponentStateTest, ValidTransitionConfiguringToConfigured)
 {
-    EXPECT_TRUE(IsValidTransition(ComponentState::Configured, ComponentState::Armed));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Configuring, ComponentState::Configured));
 }
 
-TEST(ComponentStateTest, ValidTransitionArmedToRunning)
+TEST(ComponentStateTest, ValidTransitionConfiguredToArming)
 {
-    EXPECT_TRUE(IsValidTransition(ComponentState::Armed, ComponentState::Running));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Configured, ComponentState::Arming));
 }
 
-TEST(ComponentStateTest, ValidTransitionRunningToPaused)
+TEST(ComponentStateTest, ValidTransitionArmingToArmed)
 {
-    EXPECT_TRUE(IsValidTransition(ComponentState::Running, ComponentState::Paused));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Arming, ComponentState::Armed));
 }
 
-TEST(ComponentStateTest, ValidTransitionPausedToRunning)
+TEST(ComponentStateTest, ValidTransitionArmedToStarting)
 {
-    EXPECT_TRUE(IsValidTransition(ComponentState::Paused, ComponentState::Running));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Armed, ComponentState::Starting));
 }
 
-TEST(ComponentStateTest, ValidTransitionToLoaded)
+TEST(ComponentStateTest, ValidTransitionStartingToRunning)
 {
-    // Any state can transition to Loaded (reset/stop)
-    EXPECT_TRUE(IsValidTransition(ComponentState::Configured, ComponentState::Loaded));
-    EXPECT_TRUE(IsValidTransition(ComponentState::Armed, ComponentState::Loaded));
-    EXPECT_TRUE(IsValidTransition(ComponentState::Running, ComponentState::Loaded));
-    EXPECT_TRUE(IsValidTransition(ComponentState::Paused, ComponentState::Loaded));
-    EXPECT_TRUE(IsValidTransition(ComponentState::Error, ComponentState::Loaded));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Starting, ComponentState::Running));
+}
+
+TEST(ComponentStateTest, ValidTransitionRunningToStopping)
+{
+    EXPECT_TRUE(IsValidTransition(ComponentState::Running, ComponentState::Stopping));
+}
+
+TEST(ComponentStateTest, ValidTransitionStoppingToConfigured)
+{
+    EXPECT_TRUE(IsValidTransition(ComponentState::Stopping, ComponentState::Configured));
+}
+
+TEST(ComponentStateTest, ValidTransitionToIdle)
+{
+    // Any state can transition to Idle (reset/stop)
+    EXPECT_TRUE(IsValidTransition(ComponentState::Configuring, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Configured, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Arming, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Armed, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Starting, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Running, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Stopping, ComponentState::Idle));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Error, ComponentState::Idle));
 }
 
 TEST(ComponentStateTest, ValidTransitionToError)
 {
     // Any state can transition to Error
-    EXPECT_TRUE(IsValidTransition(ComponentState::Loaded, ComponentState::Error));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Idle, ComponentState::Error));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Configuring, ComponentState::Error));
     EXPECT_TRUE(IsValidTransition(ComponentState::Configured, ComponentState::Error));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Arming, ComponentState::Error));
     EXPECT_TRUE(IsValidTransition(ComponentState::Armed, ComponentState::Error));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Starting, ComponentState::Error));
     EXPECT_TRUE(IsValidTransition(ComponentState::Running, ComponentState::Error));
-    EXPECT_TRUE(IsValidTransition(ComponentState::Paused, ComponentState::Error));
+    EXPECT_TRUE(IsValidTransition(ComponentState::Stopping, ComponentState::Error));
 }
 
-TEST(ComponentStateTest, InvalidTransitionFromLoaded)
+TEST(ComponentStateTest, InvalidTransitionFromIdle)
 {
-    EXPECT_FALSE(IsValidTransition(ComponentState::Loaded, ComponentState::Armed));
-    EXPECT_FALSE(IsValidTransition(ComponentState::Loaded, ComponentState::Running));
-    EXPECT_FALSE(IsValidTransition(ComponentState::Loaded, ComponentState::Paused));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Idle, ComponentState::Configured));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Idle, ComponentState::Armed));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Idle, ComponentState::Running));
+}
+
+TEST(ComponentStateTest, InvalidTransitionFromConfigured)
+{
+    // Cannot skip to Armed or Running directly
+    EXPECT_FALSE(IsValidTransition(ComponentState::Configured, ComponentState::Armed));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Configured, ComponentState::Running));
 }
 
 TEST(ComponentStateTest, InvalidTransitionFromArmed)
 {
-    // Cannot go directly from Armed to Configured or Paused
+    // Cannot go directly from Armed to Running or back to Configured
+    EXPECT_FALSE(IsValidTransition(ComponentState::Armed, ComponentState::Running));
     EXPECT_FALSE(IsValidTransition(ComponentState::Armed, ComponentState::Configured));
-    EXPECT_FALSE(IsValidTransition(ComponentState::Armed, ComponentState::Paused));
 }
 
 TEST(ComponentStateTest, InvalidTransitionFromRunning)
 {
-    // Cannot go directly from Running to Configured or Armed
+    // Cannot skip Stopping state
     EXPECT_FALSE(IsValidTransition(ComponentState::Running, ComponentState::Configured));
     EXPECT_FALSE(IsValidTransition(ComponentState::Running, ComponentState::Armed));
 }
@@ -88,6 +119,7 @@ TEST(ComponentStateTest, InvalidTransitionFromRunning)
 TEST(ComponentStateTest, SameStateTransition)
 {
     // Same state is not a valid transition
-    EXPECT_FALSE(IsValidTransition(ComponentState::Loaded, ComponentState::Loaded));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Idle, ComponentState::Idle));
+    EXPECT_FALSE(IsValidTransition(ComponentState::Configuring, ComponentState::Configuring));
     EXPECT_FALSE(IsValidTransition(ComponentState::Running, ComponentState::Running));
 }

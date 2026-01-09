@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include "ComponentState.hpp"
+#include <delila/core/ComponentState.hpp>
 
 namespace DELILA {
 namespace Net {
@@ -60,9 +60,9 @@ public:
     };
 
     /**
-     * @brief Constructor - starts in Loaded state
+     * @brief Constructor - starts in Idle state
      */
-    TwoPhaseStartManager() : state_(ComponentState::Loaded) {}
+    TwoPhaseStartManager() : state_(ComponentState::Idle) {}
 
     /**
      * @brief Get current state
@@ -79,7 +79,7 @@ public:
      */
     Result Configure()
     {
-        if (state_ != ComponentState::Loaded) {
+        if (state_ != ComponentState::Idle) {
             return Result::InvalidState;
         }
         state_ = ComponentState::Configured;
@@ -122,7 +122,7 @@ public:
     }
 
     /**
-     * @brief Stop and return to Loaded state
+     * @brief Stop and return to Idle state
      * @return Result::Success if transition succeeded
      */
     Result Stop()
@@ -130,7 +130,7 @@ public:
         if (state_ != ComponentState::Running && state_ != ComponentState::Armed) {
             return Result::InvalidState;
         }
-        state_ = ComponentState::Loaded;
+        state_ = ComponentState::Idle;
         return Result::Success;
     }
 
@@ -140,7 +140,7 @@ public:
      */
     Result Reset()
     {
-        state_ = ComponentState::Loaded;
+        state_ = ComponentState::Idle;
         return Result::Success;
     }
 

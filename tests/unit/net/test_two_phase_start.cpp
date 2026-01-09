@@ -7,6 +7,7 @@
 
 #include "TwoPhaseStartManager.hpp"
 
+using namespace DELILA;
 using namespace DELILA::Net;
 
 class TwoPhaseStartTest : public ::testing::Test {
@@ -21,7 +22,7 @@ protected:
 
 TEST_F(TwoPhaseStartTest, InitialStateIsLoaded)
 {
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, ConfigureTransitionsToConfigured)
@@ -35,7 +36,7 @@ TEST_F(TwoPhaseStartTest, ArmFromLoadedFails)
 {
     auto result = manager_->Arm();
     EXPECT_EQ(result, TwoPhaseStartManager::Result::InvalidState);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, ArmFromConfiguredSucceeds)
@@ -67,7 +68,7 @@ TEST_F(TwoPhaseStartTest, TriggerFromLoadedFails)
 {
     auto result = manager_->Trigger();
     EXPECT_EQ(result, TwoPhaseStartManager::Result::NotArmed);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, StopFromRunningSucceeds)
@@ -78,7 +79,7 @@ TEST_F(TwoPhaseStartTest, StopFromRunningSucceeds)
 
     auto result = manager_->Stop();
     EXPECT_EQ(result, TwoPhaseStartManager::Result::Success);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, StopFromArmedSucceeds)
@@ -88,7 +89,7 @@ TEST_F(TwoPhaseStartTest, StopFromArmedSucceeds)
 
     auto result = manager_->Stop();
     EXPECT_EQ(result, TwoPhaseStartManager::Result::Success);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, ResetFromAnyStateSucceeds)
@@ -99,7 +100,7 @@ TEST_F(TwoPhaseStartTest, ResetFromAnyStateSucceeds)
 
     auto result = manager_->Reset();
     EXPECT_EQ(result, TwoPhaseStartManager::Result::Success);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, DoubleArmReturnsAlreadyArmed)
@@ -125,7 +126,7 @@ TEST_F(TwoPhaseStartTest, CompleteWorkflow)
     EXPECT_EQ(manager_->GetState(), ComponentState::Running);
 
     EXPECT_EQ(manager_->Stop(), TwoPhaseStartManager::Result::Success);
-    EXPECT_EQ(manager_->GetState(), ComponentState::Loaded);
+    EXPECT_EQ(manager_->GetState(), ComponentState::Idle);
 }
 
 TEST_F(TwoPhaseStartTest, IsArmed)

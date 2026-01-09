@@ -29,15 +29,19 @@ enum class CommandType : uint8_t {
  * @brief Command structure for REQ/REP communication
  */
 struct Command {
-  CommandType type;       ///< Command type
-  uint32_t request_id;    ///< Unique request ID for correlation
+  CommandType type;        ///< Command type
+  uint32_t request_id;     ///< Unique request ID for correlation
   std::string config_path; ///< Configuration file path (for Configure command)
-  std::string payload;    ///< Additional command payload (JSON)
+  uint32_t run_number;     ///< Run number (for Start command)
+  bool graceful;           ///< Graceful stop flag (for Stop command)
+  std::string payload;     ///< Additional command payload (JSON)
 
-  Command() : type(CommandType::GetStatus), request_id(0) {}
+  Command()
+      : type(CommandType::GetStatus), request_id(0), run_number(0),
+        graceful(true) {}
 
   Command(CommandType t, uint32_t id = 0)
-      : type(t), request_id(id) {}
+      : type(t), request_id(id), run_number(0), graceful(true) {}
 };
 
 /**

@@ -2,65 +2,67 @@
 #define DELILA_CORE_ICOMPONENT_HPP
 
 #include "ComponentState.hpp"
+#include "ComponentStatus.hpp"
+#include <nlohmann/json_fwd.hpp>
 #include <string>
 
 namespace DELILA {
 
 /**
- * @brief Interface for DAQ components
+ * @brief Base interface for all DAQ components
  *
  * Defines the common lifecycle for all DAQ components:
- * - Digitizer: Hardware interface for data acquisition
- * - Sink: Data receiver and storage
- * - Monitor: Real-time data visualization
+ * - DigitizerSource: Hardware interface for data acquisition
+ * - FileWriter: Data storage
+ * - TimeSortMerger: Multi-source data merging
  *
- * State transitions:
- *   Idle --Configure()--> Configured
- *   Configured --Start()--> Armed
- *   Armed --internal--> Running
- *   Running --Stop()--> Configured
- *   Any --Reset()--> Idle
- *   Any --error--> Error
+ * Lifecycle:
+ *   1. Construct component
+ *   2. Initialize(config_path) - load configuration
+ *   3. Run() - start main loop (blocking)
+ *   4. Shutdown() - cleanup
+ *
+ * State transitions (triggered by operator commands):
+ *   Idle -> Configuring -> Configured -> Arming -> Armed -> Starting -> Running
+ *   Running -> Stopping -> Configured
+ *   Any -> Error
+ *   Error -> Idle (via Reset)
  */
 class IComponent {
 public:
   virtual ~IComponent() = default;
 
-  // Lifecycle methods
-  /**
-   * @brief Load and validate configuration
-   * @param config_path Path to configuration file
-   * @return true if configuration is valid and loaded
-   *
-   * Transitions: Idle -> Configured
-   */
-  virtual bool Configure(const std::string &config_path) = 0;
+  // === Lifecycle (called by main/framework) ===
 
   /**
-   * @brief Start data acquisition
-   * @return true if started successfully
+   * @brief Initialize component with configuration file
+   * @param config_path Path to JSON configuration file
+   * @return true if initialization succeeded
    *
-   * Transitions: Configured -> Armed -> Running
+   * Loads configuration and prepares the component.
+   * After this call, the component is ready to receive commands.
    */
-  virtual bool Start() = 0;
+  virtual bool Initialize(const std::string &config_path) = 0;
 
   /**
-   * @brief Stop data acquisition
-   * @return true if stopped successfully
+   * @brief Run the component main loop
    *
-   * Transitions: Running -> Configured
+   * Starts all threads and enters the main loop.
+   * This method blocks until Shutdown() is called.
+   * Handles command reception and state transitions.
    */
-  virtual bool Stop() = 0;
+  virtual void Run() = 0;
 
   /**
-   * @brief Reset component to Idle state
+   * @brief Shutdown the component
    *
-   * Clears all configuration and recovers from Error state.
-   * Transitions: Any -> Idle
+   * Stops all threads and releases resources.
+   * Called when the component should terminate.
    */
-  virtual void Reset() = 0;
+  virtual void Shutdown() = 0;
 
-  // State query
+  // === State Query ===
+
   /**
    * @brief Get current component state
    */
@@ -72,6 +74,58 @@ public:
    * Format: "type_hostname_index" (e.g., "digitizer_daq01_0")
    */
   virtual std::string GetComponentId() const = 0;
+
+  /**
+   * @brief Get current component status with metrics
+   */
+  virtual ComponentStatus GetStatus() const = 0;
+
+protected:
+  // === Callbacks (implemented by derived classes) ===
+
+  /**
+   * @brief Called when Configure command is received
+   * @param config JSON configuration object
+   * @return true if configuration succeeded
+   *
+   * Transitions: Idle -> Configuring -> Configured
+   */
+  virtual bool OnConfigure(const nlohmann::json &config) = 0;
+
+  /**
+   * @brief Called when Arm command is received
+   * @return true if arm succeeded
+   *
+   * Prepares hardware for synchronized start.
+   * Transitions: Configured -> Arming -> Armed
+   */
+  virtual bool OnArm() = 0;
+
+  /**
+   * @brief Called when Start command is received
+   * @param run_number Run number for this acquisition
+   * @return true if start succeeded
+   *
+   * Transitions: Armed -> Starting -> Running
+   */
+  virtual bool OnStart(uint32_t run_number) = 0;
+
+  /**
+   * @brief Called when Stop command is received
+   * @param graceful true for graceful stop, false for emergency stop
+   * @return true if stop succeeded
+   *
+   * Transitions: Running -> Stopping -> Configured
+   */
+  virtual bool OnStop(bool graceful) = 0;
+
+  /**
+   * @brief Called when Reset command is received
+   *
+   * Resets component to Idle state.
+   * Clears configuration and recovers from Error state.
+   */
+  virtual void OnReset() = 0;
 };
 
 } // namespace DELILA
