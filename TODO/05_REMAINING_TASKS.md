@@ -20,67 +20,160 @@
 | TimeSortMerger.cpp:423-428 | `SendingLoop()` | 空のループ（送信ロジックなし） |
 | TimeSortMerger.cpp:402-405 | EOS追跡 | `fEOSTracker`未使用 |
 
+### 設計方針
+
+**一括ソート方式を採用**（KISS原則）
+
+- 全入力からEOSを受信するまでイベントを収集
+- ラン終了時に全イベントをタイムスタンプでソート
+- ソート済みデータを下流へ一括送信
+
+**理由**:
+- 主な用途はオフライン解析（FileWriter）向けのファイル書き込み
+- リアルタイムソート（タイムウィンドウ方式）はOnlineAnalyzerで実装予定
+- 実装がシンプルで確実にソートされる
+
 ### 実装が必要な機能
 
-1. **マージバッファ**
-   - スレッドセーフなバッファ構造
-   - 入力ソースごとのイベント格納
-   - タイムスタンプでソート可能な構造
+1. **イベント収集バッファ**
+   - 各ReceivingLoopからイベントを受け取るキュー
+   - スレッドセーフな追加操作
 
-2. **時間ソートアルゴリズム**
-   - 各入力からのイベントを時系列順にマージ
-   - ソートウィンドウ（`fSortWindowNs`）の適用
-   - 最新タイムスタンプ - ソートウィンドウより古いイベントを出力
+2. **一括ソートロジック**
+   - 全入力からEOS受信後にソート実行
+   - `std::sort`でタイムスタンプ順に並べ替え
 
 3. **出力送信**
    - ソート済みイベントのシリアライズ
    - `fOutputTransport`経由でPUSH送信
+   - 送信完了後にEOSを送信
 
 4. **EOS追跡**
-   - 全入力からEOS受信を追跡
-   - 全入力完了後に下流へEOS送信
+   - `fEOSTracker`を使用して全入力のEOS受信を追跡
+   - 全入力完了を検知してソート・送信を開始
 
 ### 設計案
 
 ```cpp
-// マージバッファ構造
+// イベント収集用の構造
 struct TaggedEvent {
     size_t source_index;
     std::unique_ptr<Digitizer::EventData> event;
 };
 
-// 時間順ソート用の優先度キュー
-std::priority_queue<TaggedEvent, std::vector<TaggedEvent>, TimestampComparator> fMergeBuffer;
-std::mutex fMergeBufferMutex;
+// メンバ変数
+std::vector<TaggedEvent> fCollectedEvents;
+std::mutex fCollectedEventsMutex;
 
-// ソートウィンドウの適用
-void MergingLoop() {
+// ReceivingLoopでイベントを収集
+void ReceivingLoop(size_t input_index) {
     while (fRunning) {
-        std::lock_guard<std::mutex> lock(fMergeBufferMutex);
+        auto data = fInputTransports[input_index]->ReceiveBytes();
 
-        if (fMergeBuffer.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
+        if (Net::DataProcessor::IsEOSMessage(data->data(), data->size())) {
+            fEOSTracker->ReceiveEOS("input_" + std::to_string(input_index));
+            break;
         }
 
-        // 最新タイムスタンプを取得
-        double newest_timestamp = GetNewestTimestamp();
-        double output_threshold = newest_timestamp - fSortWindowNs;
-
-        // 閾値より古いイベントを出力キューへ
-        while (!fMergeBuffer.empty() &&
-               fMergeBuffer.top().event->timeStampNs < output_threshold) {
-            // 出力キューに追加
-            fOutputQueue.push(std::move(fMergeBuffer.top()));
-            fMergeBuffer.pop();
+        auto [events, sequence] = fDataProcessor->Decode(data);
+        if (events && !events->empty()) {
+            std::lock_guard<std::mutex> lock(fCollectedEventsMutex);
+            for (auto& event : *events) {
+                fCollectedEvents.push_back({input_index, std::move(event)});
+            }
+            fEventsProcessed += events->size();
         }
     }
 }
+
+// MergingLoop（実際はラン終了時に1回実行）
+void MergingLoop() {
+    // 全入力からEOS受信を待機
+    while (fRunning && !fEOSTracker->AllEOSReceived()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    if (!fRunning) return;
+
+    // 全イベントをタイムスタンプでソート
+    {
+        std::lock_guard<std::mutex> lock(fCollectedEventsMutex);
+        std::sort(fCollectedEvents.begin(), fCollectedEvents.end(),
+            [](const auto& a, const auto& b) {
+                return a.event->timeStampNs < b.event->timeStampNs;
+            });
+    }
+
+    // ソート済みイベントを送信
+    SendAllEvents();
+
+    // EOS送信
+    fOutputTransport->SendEOS();
+}
 ```
+
+### 注意事項
+
+- `fSortWindowNs`は現在の実装では使用しない（将来のOnlineAnalyzer用に残す）
+- メモリ使用量はラン中の全イベント数に比例（大規模ラン時は注意）
 
 ---
 
-## 2. 設定ファイル読込（全コンポーネント共通）
+## 2. OnlineAnalyzer タイムウィンドウ方式（将来実装）
+
+**優先度**: 低（現時点では未実装予定）
+**影響**: リアルタイム解析が必要な場合のみ
+
+### 概要
+
+オンライン解析用にリアルタイムでソートされたデータストリームが必要な場合、
+タイムウィンドウ方式をOnlineAnalyzerコンポーネントに実装する。
+
+### 設計方針
+
+```
+[Source1] ──┐
+            ├──▶ [TimeSortMerger] ──▶ [OnlineAnalyzer]
+[Source2] ──┘                              │
+                                           ├── タイムウィンドウ適用
+                                           ├── リアルタイムソート
+                                           └── 解析処理
+```
+
+### タイムウィンドウ方式の実装案
+
+```cpp
+class OnlineAnalyzer : public IDataComponent {
+private:
+    uint64_t fTimeWindowNs = 10000000;  // 10ms デフォルト
+    std::priority_queue<Event, std::vector<Event>, TimestampComparator> fSortBuffer;
+
+    void ProcessingLoop() {
+        while (fRunning) {
+            auto event = ReceiveEvent();
+            fSortBuffer.push(event);
+
+            // ウィンドウ外のイベントを処理
+            double threshold = GetNewestTimestamp() - fTimeWindowNs;
+            while (!fSortBuffer.empty() &&
+                   fSortBuffer.top().timeStampNs < threshold) {
+                AnalyzeEvent(fSortBuffer.top());
+                fSortBuffer.pop();
+            }
+        }
+    }
+};
+```
+
+### メリット
+
+- TimeSortMergerはシンプルな一括ソートに専念
+- リアルタイム要件はOnlineAnalyzerで処理
+- 各コンポーネントの責務が明確
+
+---
+
+## 3. 設定ファイル読込（全コンポーネント共通）
 
 **優先度**: 中
 **影響**: 現在はプログラム内でハードコード設定のみ
@@ -129,7 +222,6 @@ void MergingLoop() {
      "component_id": "merger_01",
      "input_addresses": ["tcp://localhost:5555", "tcp://localhost:5556"],
      "output_address": "tcp://*:5560",
-     "sort_window_ns": 10000000,
      "command_address": "tcp://*:5561"
    }
    ```
@@ -147,7 +239,7 @@ void MergingLoop() {
 
 ---
 
-## 3. キューベースのスレッド分離
+## 4. キューベースのスレッド分離
 
 **優先度**: 低
 **影響**: 高負荷時のパフォーマンス（現状でも動作する）
@@ -183,7 +275,7 @@ void MergingLoop() {
 
 ---
 
-## 4. 実デジタイザハードウェア統合
+## 5. 実デジタイザハードウェア統合
 
 **優先度**: 高（実運用時）
 **影響**: 実ハードウェアからのデータ取得
@@ -228,10 +320,11 @@ void MergingLoop() {
 
 | 順位 | タスク | 理由 |
 |------|--------|------|
-| 1 | TimeSortMerger時間ソート | 複数ソースのマージが動作しない |
+| 1 | TimeSortMerger一括ソート | 複数ソースのマージが動作しない |
 | 2 | 実デジタイザ統合 | 実運用に必須 |
 | 3 | 設定ファイル読込 | 運用時の柔軟性向上 |
 | 4 | キューベース分離 | パフォーマンス最適化（後回し可） |
+| 5 | OnlineAnalyzerタイムウィンドウ | リアルタイム解析が必要な場合のみ |
 
 ---
 
