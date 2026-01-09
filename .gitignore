@@ -85,7 +85,10 @@ aogaki
 *.xz
 *.bz2
 
-# TODO
+# PreSearch (separate project)
+PreSearch/
+
+# Build directories
 build*
 
 # Documentation generated files
