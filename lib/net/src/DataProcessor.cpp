@@ -70,6 +70,7 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
   // Compression is disabled - always NONE
   header.compression_type = COMPRESSION_NONE;
   header.checksum_type = checksum_enabled_ ? CHECKSUM_CRC32 : CHECKSUM_NONE;
+  header.message_type = MESSAGE_TYPE_DATA;
 
   // Serialize event data
   auto serializedData = Serialize(events);
@@ -131,6 +132,7 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::Process(
   // Compression is disabled - always NONE
   header.compression_type = COMPRESSION_NONE;
   header.checksum_type = checksum_enabled_ ? CHECKSUM_CRC32 : CHECKSUM_NONE;
+  header.message_type = MESSAGE_TYPE_DATA;
 
   // Serialize event data
   auto serializedData = SerializeMinimal(events);
@@ -578,6 +580,58 @@ std::unique_ptr<std::vector<uint8_t>> DataProcessor::ProcessWithAutoSequence(
         &events)
 {
   return Process(events, GetNextSequence());
+}
+
+// EOS (End Of Stream) message creation
+std::unique_ptr<std::vector<uint8_t>> DataProcessor::CreateEOSMessage()
+{
+  // Create header-only message with EOS type
+  BinaryDataHeader header{};
+  header.magic_number = BINARY_DATA_MAGIC_NUMBER;
+  header.sequence_number = GetNextSequence();
+  header.format_version = FORMAT_VERSION_EVENTDATA;
+  header.header_size = BINARY_DATA_HEADER_SIZE;
+  header.event_count = 0;  // No events in EOS
+  header.uncompressed_size = 0;
+  header.compressed_size = 0;
+  header.checksum = 0;  // No payload to checksum
+  header.timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+  header.compression_type = COMPRESSION_NONE;
+  header.checksum_type = CHECKSUM_NONE;
+  header.message_type = MESSAGE_TYPE_EOS;
+
+  // Clear reserved fields
+  std::memset(header.reserved, 0, sizeof(header.reserved));
+
+  // Create output with header only (no payload)
+  auto result = std::make_unique<std::vector<uint8_t>>(sizeof(header));
+  std::memcpy(result->data(), &header, sizeof(header));
+
+  return result;
+}
+
+bool DataProcessor::IsEOSMessage(const std::vector<uint8_t> &data)
+{
+  return IsEOSMessage(data.data(), data.size());
+}
+
+bool DataProcessor::IsEOSMessage(const uint8_t *data, size_t size)
+{
+  if (!data || size < sizeof(BinaryDataHeader)) {
+    return false;
+  }
+
+  const BinaryDataHeader *header =
+      reinterpret_cast<const BinaryDataHeader *>(data);
+
+  // Validate magic number first
+  if (header->magic_number != BINARY_DATA_MAGIC_NUMBER) {
+    return false;
+  }
+
+  return header->message_type == MESSAGE_TYPE_EOS;
 }
 
 }  // namespace DELILA::Net

@@ -966,3 +966,155 @@ TEST_F(DecodePipelineTest, DecodeHandlesPayloadSizeMismatch) {
     EXPECT_EQ(result.first, nullptr);  // Should fail due to size mismatch
     EXPECT_EQ(result.second, 0);
 }
+
+// ============================================================================
+// Phase 8: EOS (End Of Stream) Message Tests (TDD RED Phase)
+// ============================================================================
+
+class EOSMessageTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        processor = std::make_unique<DataProcessor>();
+    }
+
+    std::unique_ptr<DataProcessor> processor;
+};
+
+// Test EOS message creation
+TEST_F(EOSMessageTest, CreateEOSMessageReturnsValidMessage) {
+    auto eos_message = processor->CreateEOSMessage();
+
+    ASSERT_NE(eos_message, nullptr);
+    EXPECT_EQ(eos_message->size(), sizeof(BinaryDataHeader));  // Header only, no payload
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageHasCorrectMagicNumber) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(eos_message->data());
+    EXPECT_EQ(header->magic_number, BINARY_DATA_MAGIC_NUMBER);
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageHasCorrectMessageType) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(eos_message->data());
+    EXPECT_EQ(header->message_type, MESSAGE_TYPE_EOS);
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageHasZeroEventCount) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(eos_message->data());
+    EXPECT_EQ(header->event_count, 0);
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageHasZeroPayloadSize) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(eos_message->data());
+    EXPECT_EQ(header->uncompressed_size, 0);
+    EXPECT_EQ(header->compressed_size, 0);
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageHasValidTimestamp) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(eos_message->data());
+    EXPECT_GT(header->timestamp, 0);
+}
+
+TEST_F(EOSMessageTest, CreateEOSMessageIncrementsSequenceNumber) {
+    processor->ResetSequence();
+
+    auto eos1 = processor->CreateEOSMessage();
+    auto eos2 = processor->CreateEOSMessage();
+
+    ASSERT_NE(eos1, nullptr);
+    ASSERT_NE(eos2, nullptr);
+
+    const BinaryDataHeader* header1 = reinterpret_cast<const BinaryDataHeader*>(eos1->data());
+    const BinaryDataHeader* header2 = reinterpret_cast<const BinaryDataHeader*>(eos2->data());
+
+    EXPECT_EQ(header2->sequence_number, header1->sequence_number + 1);
+}
+
+// Test IsEOSMessage detection
+TEST_F(EOSMessageTest, IsEOSMessageDetectsEOSMessage) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    EXPECT_TRUE(DataProcessor::IsEOSMessage(*eos_message));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForDataMessage) {
+    // Create a regular data message
+    auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
+    auto event = std::make_unique<EventData>();
+    event->module = 0;
+    event->channel = 1;
+    event->energy = 1000;
+    events->push_back(std::move(event));
+
+    auto data_message = processor->Process(events, 0);
+    ASSERT_NE(data_message, nullptr);
+
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(*data_message));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForEmptyVector) {
+    std::vector<uint8_t> empty_data;
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(empty_data));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForTooSmallData) {
+    std::vector<uint8_t> small_data(10, 0);  // Too small to contain header
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(small_data));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForInvalidMagicNumber) {
+    std::vector<uint8_t> invalid_data(sizeof(BinaryDataHeader), 0);
+    BinaryDataHeader* header = reinterpret_cast<BinaryDataHeader*>(invalid_data.data());
+
+    header->magic_number = 0x12345678;  // Wrong magic number
+    header->message_type = MESSAGE_TYPE_EOS;
+
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(invalid_data));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageWithPointerAndSize) {
+    auto eos_message = processor->CreateEOSMessage();
+    ASSERT_NE(eos_message, nullptr);
+
+    EXPECT_TRUE(DataProcessor::IsEOSMessage(eos_message->data(), eos_message->size()));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForNullPointer) {
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(nullptr, 100));
+}
+
+TEST_F(EOSMessageTest, IsEOSMessageReturnsFalseForZeroSize) {
+    uint8_t dummy[64] = {0};
+    EXPECT_FALSE(DataProcessor::IsEOSMessage(dummy, 0));
+}
+
+// Test that regular data messages have DATA message type
+TEST_F(EOSMessageTest, DataMessageHasDataMessageType) {
+    auto events = std::make_unique<std::vector<std::unique_ptr<EventData>>>();
+    auto event = std::make_unique<EventData>();
+    event->module = 0;
+    event->channel = 1;
+    event->energy = 1000;
+    events->push_back(std::move(event));
+
+    auto data_message = processor->Process(events, 0);
+    ASSERT_NE(data_message, nullptr);
+
+    const BinaryDataHeader* header = reinterpret_cast<const BinaryDataHeader*>(data_message->data());
+    EXPECT_EQ(header->message_type, MESSAGE_TYPE_DATA);
+}

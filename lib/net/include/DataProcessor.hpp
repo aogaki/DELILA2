@@ -28,9 +28,10 @@ struct BinaryDataHeader {
       compressed_size;  // 4 bytes: size after compression (equals uncompressed_size if no compression)
   uint32_t checksum;   // 4 bytes: CRC32 or 0 if disabled
   uint64_t timestamp;  // 8 bytes: Unix timestamp in nanoseconds since epoch
-  uint8_t compression_type;  // 1 byte: 0=none, 1=LZ4
+  uint8_t compression_type;  // 1 byte: 0=none
   uint8_t checksum_type;     // 1 byte: 0=none, 1=CRC32
-  uint8_t reserved[14];      // 14 bytes: future use
+  uint8_t message_type;      // 1 byte: 0=Data, 2=EndOfStream
+  uint8_t reserved[13];      // 13 bytes: future use
 };  // Total: 64 bytes
 
 constexpr uint32_t BINARY_DATA_HEADER_SIZE = 64;
@@ -49,6 +50,10 @@ constexpr uint8_t COMPRESSION_NONE = 0;
 // Checksum type constants
 constexpr uint8_t CHECKSUM_NONE = 0;
 constexpr uint8_t CHECKSUM_CRC32 = 1;
+
+// Message type constants for data stream
+constexpr uint8_t MESSAGE_TYPE_DATA = 0;
+constexpr uint8_t MESSAGE_TYPE_EOS = 2;  // End Of Stream
 
 class DataProcessor
 {
@@ -89,6 +94,13 @@ class DataProcessor
   std::unique_ptr<std::vector<uint8_t>> ProcessWithAutoSequence(
       const std::unique_ptr<std::vector<std::unique_ptr<MinimalEventData>>>
           &events);
+
+  // Create End-Of-Stream marker message
+  std::unique_ptr<std::vector<uint8_t>> CreateEOSMessage();
+
+  // Check if a message is EOS (header-only check)
+  static bool IsEOSMessage(const std::vector<uint8_t> &data);
+  static bool IsEOSMessage(const uint8_t *data, size_t size);
 
  private:
   bool checksum_enabled_ = true;  // Default: CRC32 checksum ON

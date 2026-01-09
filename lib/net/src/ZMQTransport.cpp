@@ -20,16 +20,22 @@ bool ZMQTransport::IsConnected() const { return fConnected; }
 bool ZMQTransport::Configure(const TransportConfig &config)
 {
   // Simple validation following KISS principle
-  if (config.data_address.empty()) {
-    return false;  // Reject empty address
+  // Allow command-only transport (data_address empty but command_address set)
+  bool has_data = !config.data_address.empty();
+  bool has_command = !config.command_address.empty();
+
+  if (!has_data && !has_command) {
+    return false;  // Reject completely empty configuration
   }
 
-  // Validate data pattern
-  if (config.data_pattern != "PUB" && config.data_pattern != "SUB" &&
-      config.data_pattern != "PUSH" && config.data_pattern != "PULL" &&
-      config.data_pattern != "DEALER" && config.data_pattern != "ROUTER" &&
-      config.data_pattern != "PAIR") {
-    return false;  // Reject invalid pattern
+  // Validate data pattern only if data channel is configured
+  if (has_data) {
+    if (config.data_pattern != "PUB" && config.data_pattern != "SUB" &&
+        config.data_pattern != "PUSH" && config.data_pattern != "PULL" &&
+        config.data_pattern != "DEALER" && config.data_pattern != "ROUTER" &&
+        config.data_pattern != "PAIR") {
+      return false;  // Reject invalid pattern
+    }
   }
 
   // Store valid configuration
@@ -115,76 +121,83 @@ bool ZMQTransport::Connect()
   }
 
   try {
-    // Determine effective pattern
-    std::string effective_pattern = fConfig.data_pattern;
+    // Only create data socket if data_address is configured
+    if (!fConfig.data_address.empty()) {
+      // Determine effective pattern
+      std::string effective_pattern = fConfig.data_pattern;
 
-    // Backward compatibility: If still using default "PUB", determine pattern from is_publisher
-    if (effective_pattern == "PUB" && !fConfig.is_publisher) {
-      effective_pattern = "SUB";
+      // Backward compatibility: If still using default "PUB", determine pattern from is_publisher
+      if (effective_pattern == "PUB" && !fConfig.is_publisher) {
+        effective_pattern = "SUB";
+      }
+
+      // Create sockets based on effective pattern
+      if (effective_pattern == "PUB" || effective_pattern == "PUSH" ||
+          effective_pattern == "DEALER") {
+        // Sending patterns
+        int socket_type;
+        if (effective_pattern == "PUB")
+          socket_type = ZMQ_PUB;
+        else if (effective_pattern == "PUSH")
+          socket_type = ZMQ_PUSH;
+        else
+          socket_type = ZMQ_DEALER;
+
+        fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
+        fDataSocket->set(zmq::sockopt::linger, 0);  // Don't linger on close
+
+        if (fConfig.bind_data) {
+          fDataSocket->bind(fConfig.data_address);
+        } else {
+          fDataSocket->connect(fConfig.data_address);
+        }
+      } else if (effective_pattern == "SUB" || effective_pattern == "PULL" ||
+                 effective_pattern == "ROUTER") {
+        // Receiving patterns
+        int socket_type;
+        if (effective_pattern == "SUB")
+          socket_type = ZMQ_SUB;
+        else if (effective_pattern == "PULL")
+          socket_type = ZMQ_PULL;
+        else
+          socket_type = ZMQ_ROUTER;
+
+        fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
+        fDataSocket->set(zmq::sockopt::linger, 0);  // Don't linger on close
+
+        // SUB sockets need subscription filter
+        if (effective_pattern == "SUB") {
+          fDataSocket->set(zmq::sockopt::subscribe, "");  // Accept all messages
+        }
+
+        // Set receive timeout to avoid blocking indefinitely
+        fDataSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
+
+        if (fConfig.bind_data) {
+          fDataSocket->bind(fConfig.data_address);
+        } else {
+          fDataSocket->connect(fConfig.data_address);
+        }
+      } else if (effective_pattern == "PAIR") {
+        // PAIR pattern: Exclusive 1:1 communication (both send and receive)
+        fDataSocket = std::make_unique<zmq::socket_t>(*fContext, ZMQ_PAIR);
+        fDataSocket->set(zmq::sockopt::linger, 0);  // Don't linger on close
+
+        // Set receive timeout
+        fDataSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
+
+        if (fConfig.bind_data) {
+          fDataSocket->bind(fConfig.data_address);
+        } else {
+          fDataSocket->connect(fConfig.data_address);
+        }
+      }
     }
 
-    // Create sockets based on effective pattern
-    if (effective_pattern == "PUB" || effective_pattern == "PUSH" ||
-        effective_pattern == "DEALER") {
-      // Sending patterns
-      int socket_type;
-      if (effective_pattern == "PUB")
-        socket_type = ZMQ_PUB;
-      else if (effective_pattern == "PUSH")
-        socket_type = ZMQ_PUSH;
-      else
-        socket_type = ZMQ_DEALER;
-
-      fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
-
-      if (fConfig.bind_data) {
-        fDataSocket->bind(fConfig.data_address);
-      } else {
-        fDataSocket->connect(fConfig.data_address);
-      }
-    } else if (effective_pattern == "SUB" || effective_pattern == "PULL" ||
-               effective_pattern == "ROUTER") {
-      // Receiving patterns
-      int socket_type;
-      if (effective_pattern == "SUB")
-        socket_type = ZMQ_SUB;
-      else if (effective_pattern == "PULL")
-        socket_type = ZMQ_PULL;
-      else
-        socket_type = ZMQ_ROUTER;
-
-      fDataSocket = std::make_unique<zmq::socket_t>(*fContext, socket_type);
-
-      // SUB sockets need subscription filter
-      if (effective_pattern == "SUB") {
-        fDataSocket->set(zmq::sockopt::subscribe, "");  // Accept all messages
-      }
-
-      // Set receive timeout to avoid blocking indefinitely
-      fDataSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
-
-      if (fConfig.bind_data) {
-        fDataSocket->bind(fConfig.data_address);
-      } else {
-        fDataSocket->connect(fConfig.data_address);
-      }
-    } else if (effective_pattern == "PAIR") {
-      // PAIR pattern: Exclusive 1:1 communication (both send and receive)
-      fDataSocket = std::make_unique<zmq::socket_t>(*fContext, ZMQ_PAIR);
-
-      // Set receive timeout
-      fDataSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
-
-      if (fConfig.bind_data) {
-        fDataSocket->bind(fConfig.data_address);
-      } else {
-        fDataSocket->connect(fConfig.data_address);
-      }
-    }
-
-    // Create status socket only when status address is different from data address
-    if (fConfig.status_address != fConfig.data_address) {
+    // Create status socket only when status address is set and different from data address
+    if (!fConfig.status_address.empty() && fConfig.status_address != fConfig.data_address) {
       fStatusSocket = std::make_unique<zmq::socket_t>(*fContext, ZMQ_REQ);
+      fStatusSocket->set(zmq::sockopt::linger, 0);  // Don't linger on close
       fStatusSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second timeout
 
       if (fConfig.bind_status) {
@@ -199,6 +212,7 @@ bool ZMQTransport::Connect()
     if (!fConfig.command_address.empty()) {
       int cmd_socket_type = fConfig.bind_command ? ZMQ_REP : ZMQ_REQ;
       fCommandSocket = std::make_unique<zmq::socket_t>(*fContext, cmd_socket_type);
+      fCommandSocket->set(zmq::sockopt::linger, 0);  // Don't linger on close
       fCommandSocket->set(zmq::sockopt::rcvtimeo, 1000);  // 1 second default timeout
 
       if (fConfig.bind_command) {
@@ -535,6 +549,8 @@ std::string ZMQTransport::SerializeCommand(const DELILA::Command &cmd) const
   json << "{";
   json << "\"type\":" << static_cast<int>(cmd.type) << ",";
   json << "\"request_id\":" << cmd.request_id << ",";
+  json << "\"run_number\":" << cmd.run_number << ",";
+  json << "\"graceful\":" << (cmd.graceful ? "true" : "false") << ",";
   json << "\"config_path\":\"" << cmd.config_path << "\",";
   json << "\"payload\":\"" << cmd.payload << "\"";
   json << "}";
@@ -564,6 +580,27 @@ std::optional<DELILA::Command> ZMQTransport::DeserializeCommand(
     size_t end = json.find_first_of(",}", pos);
     if (end != std::string::npos) {
       cmd.request_id = std::stoul(json.substr(pos, end - pos));
+    }
+  }
+
+  // Extract run_number
+  pos = json.find("\"run_number\":");
+  if (pos != std::string::npos) {
+    pos += 13;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      cmd.run_number = std::stoul(json.substr(pos, end - pos));
+    }
+  }
+
+  // Extract graceful
+  pos = json.find("\"graceful\":");
+  if (pos != std::string::npos) {
+    pos += 11;
+    size_t end = json.find_first_of(",}", pos);
+    if (end != std::string::npos) {
+      std::string val = json.substr(pos, end - pos);
+      cmd.graceful = (val == "true");
     }
   }
 

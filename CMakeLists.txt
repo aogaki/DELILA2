@@ -110,7 +110,15 @@ else()
     message(STATUS "Network functionality disabled - ZMQ not found")
 endif()
 
-set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES})
+# Add component sources (requires ZMQ)
+if(ZMQ_FOUND)
+    file(GLOB_RECURSE COMPONENT_SOURCES "lib/component/src/*.cpp")
+    message(STATUS "Component library enabled")
+else()
+    set(COMPONENT_SOURCES "")
+endif()
+
+set(DELILA_SOURCES ${DIGITIZER_SOURCES} ${NET_SOURCES} ${COMPONENT_SOURCES})
 
 # Create a simple main source file for version info
 set(DELILA_MAIN_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/delila_main.cpp")
@@ -144,6 +152,7 @@ add_library(DELILA SHARED
 target_include_directories(DELILA
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/core/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/digitizer/include>
         $<INSTALL_INTERFACE:include>
 )
@@ -152,6 +161,7 @@ target_include_directories(DELILA
 if(ZMQ_FOUND)
     target_include_directories(DELILA
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/net/include>
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib/component/include>
     )
 endif()
 

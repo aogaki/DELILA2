@@ -35,10 +35,11 @@ set_target_properties(delila_net PROPERTIES
     CXX_EXTENSIONS OFF
 )
 
-# Add digitizer include path for EventData.hpp
+# Add digitizer and core include paths
 target_include_directories(delila_net
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../digitizer/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../core/include>
         $<INSTALL_INTERFACE:include>
         ${ZMQ_INCLUDE_DIRS}
 )
