@@ -1,16 +1,19 @@
 /**
- * @file TimeSortMerger.hpp
- * @brief Time-sorting merger component for multiple data sources
+ * @file SimpleMerger.hpp
+ * @brief Simple merger component for multiple data sources
  *
- * TimeSortMerger receives data from N upstream sources, sorts events
- * by timestamp, and outputs a merged, time-ordered stream.
+ * SimpleMerger receives data from N upstream sources and forwards
+ * them to a single downstream output without sorting.
+ * Sorting is left to downstream components if needed.
  */
 
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 #include <thread>
 #include <vector>
@@ -29,25 +32,28 @@ class EOSTracker;
 }  // namespace Net
 
 /**
- * @brief Merges multiple data streams with time-based sorting
+ * @brief Merges multiple data streams without sorting
  *
  * This component:
  * - Receives data from N input sources (PULL sockets)
- * - Buffers events within a configurable time window
- * - Sorts events by timestamp
- * - Outputs merged, time-ordered stream (PUSH socket)
+ * - Buffers data in a thread-safe queue
+ * - Forwards data to downstream (PUSH socket)
+ * - No sorting - downstream handles sorting if needed
+ *
+ * Architecture:
+ *   N ReceivingThreads -> Queue -> 1 SendingThread
  *
  * State transitions follow IComponent standard:
  *   Idle -> Configured -> Armed -> Running -> Configured
  */
-class TimeSortMerger : public IDataComponent {
+class SimpleMerger : public IDataComponent {
 public:
-  TimeSortMerger();
-  ~TimeSortMerger() override;
+  SimpleMerger();
+  ~SimpleMerger() override;
 
   // Disable copy
-  TimeSortMerger(const TimeSortMerger &) = delete;
-  TimeSortMerger &operator=(const TimeSortMerger &) = delete;
+  SimpleMerger(const SimpleMerger &) = delete;
+  SimpleMerger &operator=(const SimpleMerger &) = delete;
 
   // === IComponent interface ===
   bool Initialize(const std::string &config_path) override;
@@ -79,25 +85,16 @@ public:
   void SetComponentId(const std::string &id);
 
   /**
-   * @brief Set the sort window size in nanoseconds
-   * @param window_ns Time window for buffering and sorting
-   *
-   * Events are buffered until they are older than (newest_timestamp - window_ns).
-   * Larger windows provide better sorting but increase latency and memory usage.
-   */
-  void SetSortWindowNs(uint64_t window_ns);
-
-  /**
-   * @brief Get the current sort window size
-   * @return Sort window in nanoseconds
-   */
-  uint64_t GetSortWindowNs() const;
-
-  /**
    * @brief Get the number of configured input sources
    * @return Number of input addresses
    */
   size_t GetInputCount() const;
+
+  /**
+   * @brief Get current queue size
+   * @return Number of items in queue
+   */
+  size_t GetQueueSize() const;
 
   // === Testing utilities ===
   void ForceError(const std::string &message);
@@ -114,7 +111,6 @@ private:
   // === Helper methods ===
   bool TransitionTo(ComponentState newState);
   void ReceivingLoop(size_t input_index);
-  void MergingLoop();
   void SendingLoop();
 
   // === State ===
@@ -126,9 +122,6 @@ private:
   std::vector<std::string> fInputAddresses;
   std::vector<std::string> fOutputAddresses;
 
-  // === Configuration ===
-  uint64_t fSortWindowNs{10000000};  // Default: 10ms
-
   // === Run state ===
   std::atomic<uint32_t> fRunNumber{0};
   std::string fErrorMessage;
@@ -136,9 +129,14 @@ private:
   std::atomic<uint64_t> fBytesTransferred{0};
   std::atomic<uint64_t> fHeartbeatCounter{0};
 
+  // === Thread-safe queue for data buffering ===
+  std::queue<std::unique_ptr<std::vector<uint8_t>>> fDataQueue;
+  mutable std::mutex fQueueMutex;
+  std::condition_variable fQueueCondition;
+  static constexpr size_t kMaxQueueSize = 10000;  // Prevent unbounded growth
+
   // === Threads ===
   std::vector<std::unique_ptr<std::thread>> fReceivingThreads;
-  std::unique_ptr<std::thread> fMergingThread;
   std::unique_ptr<std::thread> fSendingThread;
   std::atomic<bool> fRunning{false};
   std::atomic<bool> fShutdownRequested{false};
@@ -148,6 +146,9 @@ private:
   std::unique_ptr<Net::ZMQTransport> fOutputTransport;
   std::unique_ptr<Net::DataProcessor> fDataProcessor;
   std::unique_ptr<Net::EOSTracker> fEOSTracker;
+
+  // === EOS tracking ===
+  std::atomic<size_t> fEOSReceivedCount{0};
 
   // === Command channel ===
   std::string fCommandAddress;

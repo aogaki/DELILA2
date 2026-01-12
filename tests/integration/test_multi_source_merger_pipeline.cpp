@@ -1,11 +1,11 @@
 /**
  * @file test_multi_source_merger_pipeline.cpp
- * @brief Integration tests for Multiple DigitizerSource → TimeSortMerger → FileWriter pipeline
+ * @brief Integration tests for Multiple DigitizerSource → SimpleMerger → FileWriter pipeline
  *
  * This test validates the complete data flow:
  * 1. Multiple DigitizerSources (mock mode) generate events
- * 2. Events are serialized and sent via ZMQ to TimeSortMerger
- * 3. TimeSortMerger receives from all sources (time sorting is TODO)
+ * 2. Events are serialized and sent via ZMQ to SimpleMerger
+ * 3. SimpleMerger receives from all sources and forwards without sorting
  * 4. Merged data is sent to FileWriter
  * 5. FileWriter writes to file
  */
@@ -23,7 +23,7 @@
 
 #include "DigitizerSource.hpp"
 #include "FileWriter.hpp"
-#include "TimeSortMerger.hpp"
+#include "SimpleMerger.hpp"
 #include "delila/core/ComponentState.hpp"
 #include "test_utils.hpp"
 
@@ -68,7 +68,7 @@ class MultiSourceMergerPipelineTest : public ::testing::Test {
       sources_.push_back(std::make_unique<DigitizerSource>());
     }
 
-    merger_ = std::make_unique<TimeSortMerger>();
+    merger_ = std::make_unique<SimpleMerger>();
     writer_ = std::make_unique<FileWriter>();
   }
 
@@ -112,7 +112,6 @@ class MultiSourceMergerPipelineTest : public ::testing::Test {
     merger_->SetComponentId("test_merger");
     merger_->SetInputAddresses(source_addresses_);
     merger_->SetOutputAddresses({merger_output_address_});
-    merger_->SetSortWindowNs(5000000);  // 5ms sort window
   }
 
   // Helper to configure writer
@@ -185,7 +184,7 @@ class MultiSourceMergerPipelineTest : public ::testing::Test {
   std::string merger_output_address_;
   std::filesystem::path temp_dir_;
   std::vector<std::unique_ptr<DigitizerSource>> sources_;
-  std::unique_ptr<TimeSortMerger> merger_;
+  std::unique_ptr<SimpleMerger> merger_;
   std::unique_ptr<FileWriter> writer_;
 };
 

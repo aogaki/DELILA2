@@ -146,10 +146,19 @@ bool Digitizer1::ArmAcquisition()
     fReadDataThreads.emplace_back(&Digitizer1::ReadDataThread, this);
   }
 
-  // Send arm command to hardware
-  if (!SendCommand("/cmd/ArmAcquisition")) {
-    std::cerr << "Failed to arm acquisition" << std::endl;
-    return false;
+  // Check start mode - for START_MODE_SW, defer arm command to StartAcquisition
+  std::string startMode;
+  if (GetParameter("/par/startmode", startMode) &&
+      startMode == "START_MODE_SW") {
+    std::cout << "START_MODE_SW detected - deferring arm command to "
+                 "StartAcquisition()"
+              << std::endl;
+  } else {
+    // Send arm command to hardware for non-SW start modes
+    if (!SendCommand("/cmd/ArmAcquisition")) {
+      std::cerr << "Failed to arm acquisition" << std::endl;
+      return false;
+    }
   }
 
   fArmedFlag = true;
@@ -168,11 +177,17 @@ bool Digitizer1::StartAcquisition()
     }
   }
 
-  // Note: For Digitizer1, software start is handled by ArmAcquisition
-  // No additional command needed here for START_MODE_SW
-  // The acquisition starts immediately after arm
+  auto status = true;
+  // For START_MODE_SW, send arm command here (deferred from ArmAcquisition)
+  std::string startMode;
+  if (GetParameter("/par/startmode", startMode) &&
+      startMode == "START_MODE_SW") {
+    std::cout << "START_MODE_SW - sending arm command to start acquisition"
+              << std::endl;
+    status &= SendCommand("/cmd/ArmAcquisition");
+  }
 
-  return true;
+  return status;
 }
 
 bool Digitizer1::StopAcquisition()

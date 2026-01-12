@@ -1,4 +1,4 @@
-#include "TimeSortMerger.hpp"
+#include "SimpleMerger.hpp"
 
 #include <DataProcessor.hpp>
 #include <EOSTracker.hpp>
@@ -11,15 +11,15 @@
 
 namespace DELILA {
 
-TimeSortMerger::TimeSortMerger()
+SimpleMerger::SimpleMerger()
     : fDataProcessor(std::make_unique<Net::DataProcessor>()),
       fEOSTracker(std::make_unique<Net::EOSTracker>()) {}
 
-TimeSortMerger::~TimeSortMerger() { Shutdown(); }
+SimpleMerger::~SimpleMerger() { Shutdown(); }
 
 // === IComponent interface ===
 
-bool TimeSortMerger::Initialize(const std::string &config_path) {
+bool SimpleMerger::Initialize(const std::string &config_path) {
   std::lock_guard<std::mutex> lock(fStateMutex);
 
   if (fState != ComponentState::Idle) {
@@ -81,16 +81,19 @@ bool TimeSortMerger::Initialize(const std::string &config_path) {
   return true;
 }
 
-void TimeSortMerger::Run() {
+void SimpleMerger::Run() {
   // Main loop - wait for shutdown
   while (!fShutdownRequested) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }
 
-void TimeSortMerger::Shutdown() {
+void SimpleMerger::Shutdown() {
   fShutdownRequested = true;
   fRunning = false;
+
+  // Wake up sending thread if waiting on queue
+  fQueueCondition.notify_all();
 
   // Stop command listener first
   StopCommandListener();
@@ -103,9 +106,6 @@ void TimeSortMerger::Shutdown() {
   }
   fReceivingThreads.clear();
 
-  if (fMergingThread && fMergingThread->joinable()) {
-    fMergingThread->join();
-  }
   if (fSendingThread && fSendingThread->joinable()) {
     fSendingThread->join();
   }
@@ -122,14 +122,22 @@ void TimeSortMerger::Shutdown() {
     fOutputTransport->Disconnect();
   }
 
+  // Clear queue
+  {
+    std::lock_guard<std::mutex> lock(fQueueMutex);
+    while (!fDataQueue.empty()) {
+      fDataQueue.pop();
+    }
+  }
+
   fState = ComponentState::Idle;
 }
 
-ComponentState TimeSortMerger::GetState() const { return fState.load(); }
+ComponentState SimpleMerger::GetState() const { return fState.load(); }
 
-std::string TimeSortMerger::GetComponentId() const { return fComponentId; }
+std::string SimpleMerger::GetComponentId() const { return fComponentId; }
 
-ComponentStatus TimeSortMerger::GetStatus() const {
+ComponentStatus SimpleMerger::GetStatus() const {
   ComponentStatus status;
   status.component_id = fComponentId;
   status.state = fState.load();
@@ -139,6 +147,8 @@ ComponentStatus TimeSortMerger::GetStatus() const {
   status.run_number = fRunNumber.load();
   status.metrics.events_processed = fEventsProcessed.load();
   status.metrics.bytes_transferred = fBytesTransferred.load();
+  status.metrics.queue_size = static_cast<uint32_t>(GetQueueSize());
+  status.metrics.queue_max = static_cast<uint32_t>(kMaxQueueSize);
   status.error_message = fErrorMessage;
   status.heartbeat_counter = fHeartbeatCounter.load();
   return status;
@@ -146,61 +156,60 @@ ComponentStatus TimeSortMerger::GetStatus() const {
 
 // === IDataComponent interface ===
 
-void TimeSortMerger::SetInputAddresses(
+void SimpleMerger::SetInputAddresses(
     const std::vector<std::string> &addresses) {
   fInputAddresses = addresses;
 }
 
-void TimeSortMerger::SetOutputAddresses(
+void SimpleMerger::SetOutputAddresses(
     const std::vector<std::string> &addresses) {
   fOutputAddresses = addresses;
 }
 
-std::vector<std::string> TimeSortMerger::GetInputAddresses() const {
+std::vector<std::string> SimpleMerger::GetInputAddresses() const {
   return fInputAddresses;
 }
 
-std::vector<std::string> TimeSortMerger::GetOutputAddresses() const {
+std::vector<std::string> SimpleMerger::GetOutputAddresses() const {
   return fOutputAddresses;
 }
 
 // === Public control methods ===
 
-bool TimeSortMerger::Arm() { return OnArm(); }
+bool SimpleMerger::Arm() { return OnArm(); }
 
-bool TimeSortMerger::Start(uint32_t run_number) { return OnStart(run_number); }
+bool SimpleMerger::Start(uint32_t run_number) { return OnStart(run_number); }
 
-bool TimeSortMerger::Stop(bool graceful) { return OnStop(graceful); }
+bool SimpleMerger::Stop(bool graceful) { return OnStop(graceful); }
 
-void TimeSortMerger::Reset() { OnReset(); }
+void SimpleMerger::Reset() { OnReset(); }
 
 // === Configuration ===
 
-void TimeSortMerger::SetComponentId(const std::string &id) { fComponentId = id; }
+void SimpleMerger::SetComponentId(const std::string &id) { fComponentId = id; }
 
-void TimeSortMerger::SetSortWindowNs(uint64_t window_ns) {
-  fSortWindowNs = window_ns;
+size_t SimpleMerger::GetInputCount() const { return fInputAddresses.size(); }
+
+size_t SimpleMerger::GetQueueSize() const {
+  std::lock_guard<std::mutex> lock(fQueueMutex);
+  return fDataQueue.size();
 }
-
-uint64_t TimeSortMerger::GetSortWindowNs() const { return fSortWindowNs; }
-
-size_t TimeSortMerger::GetInputCount() const { return fInputAddresses.size(); }
 
 // === Testing utilities ===
 
-void TimeSortMerger::ForceError(const std::string &message) {
+void SimpleMerger::ForceError(const std::string &message) {
   fErrorMessage = message;
   fState = ComponentState::Error;
 }
 
 // === IComponent callbacks ===
 
-bool TimeSortMerger::OnConfigure(const nlohmann::json & /*config*/) {
+bool SimpleMerger::OnConfigure(const nlohmann::json & /*config*/) {
   // Already handled in Initialize
   return true;
 }
 
-bool TimeSortMerger::OnArm() {
+bool SimpleMerger::OnArm() {
   std::lock_guard<std::mutex> lock(fStateMutex);
 
   if (fState != ComponentState::Configured) {
@@ -232,7 +241,7 @@ bool TimeSortMerger::OnArm() {
   return true;
 }
 
-bool TimeSortMerger::OnStart(uint32_t run_number) {
+bool SimpleMerger::OnStart(uint32_t run_number) {
   std::lock_guard<std::mutex> lock(fStateMutex);
 
   if (fState != ComponentState::Armed) {
@@ -242,6 +251,15 @@ bool TimeSortMerger::OnStart(uint32_t run_number) {
   fRunNumber = run_number;
   fEventsProcessed = 0;
   fBytesTransferred = 0;
+  fEOSReceivedCount = 0;
+
+  // Clear any leftover data in queue
+  {
+    std::lock_guard<std::mutex> queueLock(fQueueMutex);
+    while (!fDataQueue.empty()) {
+      fDataQueue.pop();
+    }
+  }
 
   // Reset EOS tracker and register sources
   fEOSTracker->Reset();
@@ -255,18 +273,18 @@ bool TimeSortMerger::OnStart(uint32_t run_number) {
   fReceivingThreads.clear();
   for (size_t i = 0; i < fInputTransports.size(); ++i) {
     fReceivingThreads.push_back(
-        std::make_unique<std::thread>(&TimeSortMerger::ReceivingLoop, this, i));
+        std::make_unique<std::thread>(&SimpleMerger::ReceivingLoop, this, i));
   }
 
-  // TODO: Start merging and sending threads when sorting is implemented
-  // fMergingThread = std::make_unique<std::thread>(&TimeSortMerger::MergingLoop, this);
-  // fSendingThread = std::make_unique<std::thread>(&TimeSortMerger::SendingLoop, this);
+  // Start sending thread
+  fSendingThread =
+      std::make_unique<std::thread>(&SimpleMerger::SendingLoop, this);
 
   fState = ComponentState::Running;
   return true;
 }
 
-bool TimeSortMerger::OnStop(bool graceful) {
+bool SimpleMerger::OnStop(bool graceful) {
   std::lock_guard<std::mutex> lock(fStateMutex);
 
   if (fState != ComponentState::Running) {
@@ -275,15 +293,15 @@ bool TimeSortMerger::OnStop(bool graceful) {
 
   fRunning = false;
 
+  // Wake up sending thread
+  fQueueCondition.notify_all();
+
   if (graceful) {
     // Wait for threads to finish processing
     for (auto &thread : fReceivingThreads) {
       if (thread && thread->joinable()) {
         thread->join();
       }
-    }
-    if (fMergingThread && fMergingThread->joinable()) {
-      fMergingThread->join();
     }
     if (fSendingThread && fSendingThread->joinable()) {
       fSendingThread->join();
@@ -294,10 +312,6 @@ bool TimeSortMerger::OnStop(bool graceful) {
       if (thread) {
         thread->detach();
       }
-    }
-    if (fMergingThread) {
-      fMergingThread->detach();
-      fMergingThread.reset();
     }
     if (fSendingThread) {
       fSendingThread->detach();
@@ -310,12 +324,15 @@ bool TimeSortMerger::OnStop(bool graceful) {
   return true;
 }
 
-void TimeSortMerger::OnReset() {
+void SimpleMerger::OnReset() {
   std::lock_guard<std::mutex> lock(fStateMutex);
 
   // Stop everything
   fRunning = false;
   fShutdownRequested = false;
+
+  // Wake up sending thread
+  fQueueCondition.notify_all();
 
   for (auto &thread : fReceivingThreads) {
     if (thread && thread->joinable()) {
@@ -324,9 +341,6 @@ void TimeSortMerger::OnReset() {
   }
   fReceivingThreads.clear();
 
-  if (fMergingThread && fMergingThread->joinable()) {
-    fMergingThread->join();
-  }
   if (fSendingThread && fSendingThread->joinable()) {
     fSendingThread->join();
   }
@@ -336,6 +350,15 @@ void TimeSortMerger::OnReset() {
   fRunNumber = 0;
   fEventsProcessed = 0;
   fBytesTransferred = 0;
+  fEOSReceivedCount = 0;
+
+  // Clear queue
+  {
+    std::lock_guard<std::mutex> queueLock(fQueueMutex);
+    while (!fDataQueue.empty()) {
+      fDataQueue.pop();
+    }
+  }
 
   // Disconnect transports
   for (auto &transport : fInputTransports) {
@@ -357,7 +380,7 @@ void TimeSortMerger::OnReset() {
 
 // === Helper methods ===
 
-bool TimeSortMerger::TransitionTo(ComponentState newState) {
+bool SimpleMerger::TransitionTo(ComponentState newState) {
   ComponentState current = fState.load();
   if (IsValidTransition(current, newState)) {
     fState = newState;
@@ -366,7 +389,7 @@ bool TimeSortMerger::TransitionTo(ComponentState newState) {
   return false;
 }
 
-void TimeSortMerger::ReceivingLoop(size_t input_index) {
+void SimpleMerger::ReceivingLoop(size_t input_index) {
   if (input_index >= fInputTransports.size()) {
     return;
   }
@@ -391,18 +414,38 @@ void TimeSortMerger::ReceivingLoop(size_t input_index) {
     if (data && !data->empty()) {
       size_t dataSize = data->size();
 
-      // Decode events
-      auto [events, sequence] = fDataProcessor->Decode(data);
-      if (events && !events->empty()) {
-        // TODO: Add events to merge buffer with input_index tag
-        fEventsProcessed += events->size();
-        fBytesTransferred += dataSize;
+      // Check for EOS marker
+      if (Net::DataProcessor::IsEOSMessage(data->data(), data->size())) {
+        fEOSTracker->ReceiveEOS("input_" + std::to_string(input_index));
+        fEOSReceivedCount++;
+
+        // If all inputs have sent EOS, signal sending thread
+        if (fEOSTracker->AllReceived()) {
+          fQueueCondition.notify_all();
+        }
+        continue;
       }
 
-      // TODO: Check for EOS marker and update tracker
-      // if (isEOS) {
-      //   fEOSTracker->ReceiveEOS("input_" + std::to_string(input_index));
-      // }
+      // Push data to queue (for sending thread)
+      {
+        std::lock_guard<std::mutex> lock(fQueueMutex);
+
+        // Check queue size limit
+        if (fDataQueue.size() >= kMaxQueueSize) {
+          std::cerr << "SimpleMerger: Queue overflow! Dropping data."
+                    << std::endl;
+          continue;
+        }
+
+        fDataQueue.push(std::move(data));
+        fBytesTransferred += dataSize;
+      }
+      fQueueCondition.notify_one();
+
+      // Update event count (decode to count events)
+      // Note: We're counting bytes here; for accurate event count,
+      // we'd need to decode, but that adds overhead
+      fHeartbeatCounter++;
     } else {
       // No data available, sleep briefly
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -410,32 +453,54 @@ void TimeSortMerger::ReceivingLoop(size_t input_index) {
   }
 }
 
-void TimeSortMerger::MergingLoop() {
-  // TODO: Implement time-based sorting/merging
-  // 1. Collect events from all input buffers
-  // 2. Sort by timestamp
-  // 3. Output events older than (newest_timestamp - sort_window)
-  while (fRunning) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-}
+void SimpleMerger::SendingLoop() {
+  while (fRunning || !fDataQueue.empty()) {
+    std::unique_ptr<std::vector<uint8_t>> data;
 
-void TimeSortMerger::SendingLoop() {
-  // TODO: Implement sending of merged data
-  while (fRunning) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // Wait for data in queue
+    {
+      std::unique_lock<std::mutex> lock(fQueueMutex);
+
+      // Wait until there's data or we should stop
+      fQueueCondition.wait(lock, [this] {
+        return !fDataQueue.empty() || !fRunning;
+      });
+
+      if (fDataQueue.empty()) {
+        if (!fRunning) {
+          break;
+        }
+        continue;
+      }
+
+      data = std::move(fDataQueue.front());
+      fDataQueue.pop();
+    }
+
+    // Send data to downstream
+    if (data && !data->empty() && fOutputTransport &&
+        fOutputTransport->IsConnected()) {
+      fOutputTransport->SendBytes(data);
+    }
+  }
+
+  // After all data sent, send EOS to downstream if all inputs received EOS
+  if (fEOSTracker->AllReceived() && fOutputTransport &&
+      fOutputTransport->IsConnected()) {
+    auto eosData = fDataProcessor->CreateEOSMessage();
+    fOutputTransport->SendBytes(eosData);
   }
 }
 
 // === Command channel ===
 
-void TimeSortMerger::SetCommandAddress(const std::string &address) {
+void SimpleMerger::SetCommandAddress(const std::string &address) {
   fCommandAddress = address;
 }
 
-std::string TimeSortMerger::GetCommandAddress() const { return fCommandAddress; }
+std::string SimpleMerger::GetCommandAddress() const { return fCommandAddress; }
 
-void TimeSortMerger::StartCommandListener() {
+void SimpleMerger::StartCommandListener() {
   if (fCommandListenerRunning || fCommandAddress.empty()) {
     return;
   }
@@ -456,10 +521,10 @@ void TimeSortMerger::StartCommandListener() {
 
   fCommandListenerRunning = true;
   fCommandListenerThread =
-      std::make_unique<std::thread>(&TimeSortMerger::CommandListenerLoop, this);
+      std::make_unique<std::thread>(&SimpleMerger::CommandListenerLoop, this);
 }
 
-void TimeSortMerger::StopCommandListener() {
+void SimpleMerger::StopCommandListener() {
   fCommandListenerRunning = false;
 
   if (fCommandListenerThread && fCommandListenerThread->joinable()) {
@@ -473,7 +538,7 @@ void TimeSortMerger::StopCommandListener() {
   }
 }
 
-void TimeSortMerger::CommandListenerLoop() {
+void SimpleMerger::CommandListenerLoop() {
   while (fCommandListenerRunning) {
     auto cmd = fCommandTransport->ReceiveCommand();
     if (cmd) {
@@ -482,7 +547,7 @@ void TimeSortMerger::CommandListenerLoop() {
   }
 }
 
-void TimeSortMerger::HandleCommand(const Command &cmd) {
+void SimpleMerger::HandleCommand(const Command &cmd) {
   bool success = false;
   std::string message;
 

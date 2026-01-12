@@ -1,116 +1,51 @@
-# DELILA2 コンポーネントフレームワーク設計
+# Emulator & MonitorROOT 実装
 
-## 実装状況
-
-| フェーズ | 状態 | 内容 |
-|----------|------|------|
-| Phase 1 | ✅ 完了 | インターフェース定義 |
-| Phase 2 | ✅ 完了 | DigitizerSource → FileWriter パイプライン |
-| Phase 3 | ✅ 完了 | TimeSortMerger |
-| Phase 4 | ✅ 完了 | CLIOperator |
-| Phase 5 | ✅ 完了 | 統合テスト（Operator + DataComponents連携） |
-
-**テスト結果**: 全テスト通過（ユニットテスト329 + 統合テスト57）
+> **注意**: 全ての実装は [PRINCIPLES.md](PRINCIPLES.md) に従って行う（KISS原則、TDD）
 
 ## 概要
 
-既存のライブラリ（Digitizer, Network）を活用し、再利用可能なDAQコンポーネントフレームワークを構築する。
+新しいコンポーネントの追加:
+1. **Emulator** - デジタイザのエミュレーター（テスト・デモ用）
+2. **MonitorROOT** - ROOT/THttpServerを使用したオンラインモニター
 
-## 設計思想
-
-### 階層構造
-
-```
-IComponent (状態管理、コマンド、ステータス)
-    │
-    ├── IDataComponent (データ入出力)
-    │       │
-    │       ├── DigitizerSource (in:0, out:1)
-    │       ├── FileWriter (in:1, out:0)
-    │       ├── OnlineAnalyzer (in:1, out:0)
-    │       └── TimeSortMerger (in:N, out:1)
-    │
-    └── IOperator (システム制御)
-            │
-            └── CLIOperator
-```
-
-### 原則
-
-1. **KISS**: 必要最小限の機能から開始
-2. **Composition**: 継承より構成（has-a）
-3. **インターフェース分離**: 各コンポーネントは明確な責務を持つ
-4. **テスト駆動開発**: インターフェースごとにテストを先に作成
-
-## コンポーネント構成
-
-IDataComponentは入出力アドレスの数で役割が決まる：
-
-| コンポーネント | 入力数 | 出力数 | 用途 | 状態 |
-|----------------|--------|--------|------|------|
-| DigitizerSource | 0 | 1 | ハードウェアからデータ取得 | ✅ 実装完了 |
-| FileWriter | 1 | 0 | ファイルへデータ書き込み | ✅ 実装完了 |
-| OnlineAnalyzer | 1 | 0 | リアルタイム解析 | 未実装 |
-| TimeSortMerger | N | 1 | 複数ソースを時系列ソート | ✅ 実装完了 |
-
-## 内部構成（Composition）
-
-```cpp
-class DigitizerSource : public IDataComponent {
-private:
-    std::unique_ptr<IDigitizer> fDigitizer;      // データ取得
-    std::unique_ptr<ZMQTransport> fTransport;    // ネットワーク通信
-    std::unique_ptr<DataProcessor> fProcessor;   // シリアライズ
-};
-
-class FileWriter : public IDataComponent {
-private:
-    std::unique_ptr<ZMQTransport> fTransport;    // ネットワーク通信
-    std::unique_ptr<DataProcessor> fProcessor;   // デシリアライズ
-    std::unique_ptr<FileHandle> fFile;           // ファイル出力
-};
-```
-
-## 状態遷移
+## 現在のコンポーネント構成
 
 ```
-Idle → Configuring → Configured → Arming → Armed → Starting → Running → Stopping → Configured
-                                                                              ↓
-                                                          Any state → Error → Idle
+lib/component/
+├── DigitizerSource.hpp/cpp  - 実ハードウェアからのデータ取得
+├── SimpleMerger.hpp/cpp     - 複数入力のマージ（ソートなし）
+├── FileWriter.hpp/cpp       - ファイル書き込み
+└── CLIOperator.hpp/cpp      - CLI制御オペレーター
 ```
 
-## データフロー
+## 追加予定のコンポーネント
+
+### Emulator
+- デジタイザと同じデータフォーマットを乱数で生成
+- 各Emulatorインスタンスは固定のModule番号を持つ
+- テスト・デモ・開発時のハードウェア代替
+
+### MonitorROOT
+- データを受信してROOTヒストグラムを生成
+- THttpServerでWebブラウザからヒストグラムを閲覧可能
+- リアルタイムモニタリング用
+
+## 想定パイプライン
 
 ```
-[DigitizerSource] ──┐
-                    ├──▶ [TimeSortMerger] ──▶ [FileWriter]
-[DigitizerSource] ──┘
-                              ▲
-                              │ Command/Status
-                        [Operator]
+Emulator(mod=0) ─┐
+Emulator(mod=1) ─┼─→ SimpleMerger ─→ FileWriter
+Emulator(mod=2) ─┘         │
+                           └─→ MonitorROOT (THttpServer)
 ```
-
-## 通信
-
-| チャネル | パターン | 用途 |
-|----------|----------|------|
-| コマンド | REQ/REP | Operator → Component 制御 |
-| データ | PUSH/PULL | Component間データ転送 |
-| ステータス | PUB/SUB | Component → Operator 状態報告 |
-
-## ドキュメント構成
-
-| ファイル | 内容 | 状態 |
-|----------|------|------|
-| [00_OVERVIEW.md](00_OVERVIEW.md) | 全体概要（本ファイル） | 更新済 |
-| [01_REQUIREMENTS.md](01_REQUIREMENTS.md) | 要求仕様 | 完了 |
-| [02_INTERFACE_DESIGN.md](02_INTERFACE_DESIGN.md) | インターフェース設計 | 完了 |
-| [03_IMPLEMENTATION_PLAN.md](03_IMPLEMENTATION_PLAN.md) | 実装計画 | Phase 5完了時点で更新 |
-| [04_TEST_STRATEGY.md](04_TEST_STRATEGY.md) | テスト戦略 | 完了 |
-| [05_REMAINING_TASKS.md](05_REMAINING_TASKS.md) | 残タスク一覧 | 新規追加 |
 
 ## 関連ドキュメント
 
-- [CLAUDE.md](../CLAUDE.md) - 開発ガイドライン
-- [DESIGN.md](../DESIGN.md) - 全体設計
-- [lib/net/README.md](../lib/net/README.md) - ネットワークライブラリ
+- [PRINCIPLES.md](PRINCIPLES.md) - 開発原則（KISS、TDD、ドキュメント管理）
+- [01_EMULATOR_DESIGN.md](01_EMULATOR_DESIGN.md) - Emulator設計
+- [02_MONITOR_ROOT_DESIGN.md](02_MONITOR_ROOT_DESIGN.md) - MonitorROOT設計
+
+## アーカイブ
+
+過去のTODOは以下に保存:
+- [archive/component_framework_phase1-5/](archive/component_framework_phase1-5/) - コンポーネントフレームワーク Phase 1-5

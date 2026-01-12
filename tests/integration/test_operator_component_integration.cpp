@@ -25,7 +25,7 @@
 #include "CLIOperator.hpp"
 #include "DigitizerSource.hpp"
 #include "FileWriter.hpp"
-#include "TimeSortMerger.hpp"
+#include "SimpleMerger.hpp"
 #include "delila/core/Command.hpp"
 #include "delila/core/CommandResponse.hpp"
 #include "delila/core/ComponentState.hpp"

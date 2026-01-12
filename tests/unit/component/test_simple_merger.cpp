@@ -1,6 +1,6 @@
 /**
- * @file test_time_sort_merger.cpp
- * @brief Unit tests for TimeSortMerger component
+ * @file test_simple_merger.cpp
+ * @brief Unit tests for SimpleMerger component
  */
 
 #include <gmock/gmock.h>
@@ -9,16 +9,16 @@
 #include <chrono>
 #include <thread>
 
-#include "TimeSortMerger.hpp"
+#include "SimpleMerger.hpp"
 #include "delila/core/ComponentState.hpp"
 #include "delila/core/ComponentStatus.hpp"
 
 namespace DELILA {
 namespace test {
 
-class TimeSortMergerTest : public ::testing::Test {
+class SimpleMergerTest : public ::testing::Test {
  protected:
-  void SetUp() override { merger_ = std::make_unique<TimeSortMerger>(); }
+  void SetUp() override { merger_ = std::make_unique<SimpleMerger>(); }
 
   void TearDown() override {
     if (merger_) {
@@ -26,31 +26,35 @@ class TimeSortMergerTest : public ::testing::Test {
     }
   }
 
-  std::unique_ptr<TimeSortMerger> merger_;
+  std::unique_ptr<SimpleMerger> merger_;
 };
 
 // === Initial State Tests ===
 
-TEST_F(TimeSortMergerTest, InitialStateIsIdle) {
+TEST_F(SimpleMergerTest, InitialStateIsIdle) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Idle);
 }
 
-TEST_F(TimeSortMergerTest, HasEmptyComponentIdInitially) {
+TEST_F(SimpleMergerTest, HasEmptyComponentIdInitially) {
   auto status = merger_->GetStatus();
   EXPECT_TRUE(status.component_id.empty() ||
               status.component_id == "uninitialized");
 }
 
-TEST_F(TimeSortMergerTest, InitialStatusHasZeroMetrics) {
+TEST_F(SimpleMergerTest, InitialStatusHasZeroMetrics) {
   auto status = merger_->GetStatus();
   EXPECT_EQ(status.metrics.events_processed, 0);
   EXPECT_EQ(status.metrics.bytes_transferred, 0);
   EXPECT_EQ(status.run_number, 0);
 }
 
+TEST_F(SimpleMergerTest, InitialQueueIsEmpty) {
+  EXPECT_EQ(merger_->GetQueueSize(), 0);
+}
+
 // === Address Configuration Tests ===
 
-TEST_F(TimeSortMergerTest, CanSetMultipleInputAddresses) {
+TEST_F(SimpleMergerTest, CanSetMultipleInputAddresses) {
   std::vector<std::string> inputs = {"tcp://localhost:5555",
                                      "tcp://localhost:5556",
                                      "tcp://localhost:5557"};
@@ -63,7 +67,7 @@ TEST_F(TimeSortMergerTest, CanSetMultipleInputAddresses) {
   EXPECT_EQ(result[2], "tcp://localhost:5557");
 }
 
-TEST_F(TimeSortMergerTest, CanSetOutputAddress) {
+TEST_F(SimpleMergerTest, CanSetOutputAddress) {
   std::vector<std::string> outputs = {"tcp://localhost:6666"};
   merger_->SetOutputAddresses(outputs);
 
@@ -72,7 +76,7 @@ TEST_F(TimeSortMergerTest, CanSetOutputAddress) {
   EXPECT_EQ(result[0], "tcp://localhost:6666");
 }
 
-TEST_F(TimeSortMergerTest, InputCountMatchesConfiguredInputs) {
+TEST_F(SimpleMergerTest, InputCountMatchesConfiguredInputs) {
   std::vector<std::string> inputs = {"tcp://localhost:5555",
                                      "tcp://localhost:5556"};
   merger_->SetInputAddresses(inputs);
@@ -82,7 +86,7 @@ TEST_F(TimeSortMergerTest, InputCountMatchesConfiguredInputs) {
 
 // === State Transition Tests ===
 
-TEST_F(TimeSortMergerTest, TransitionIdleToConfigured) {
+TEST_F(SimpleMergerTest, TransitionIdleToConfigured) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
 
@@ -90,7 +94,7 @@ TEST_F(TimeSortMergerTest, TransitionIdleToConfigured) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Configured);
 }
 
-TEST_F(TimeSortMergerTest, ConfiguredToArmed) {
+TEST_F(SimpleMergerTest, ConfiguredToArmed) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -99,7 +103,7 @@ TEST_F(TimeSortMergerTest, ConfiguredToArmed) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Armed);
 }
 
-TEST_F(TimeSortMergerTest, ArmedToRunning) {
+TEST_F(SimpleMergerTest, ArmedToRunning) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -110,7 +114,7 @@ TEST_F(TimeSortMergerTest, ArmedToRunning) {
   EXPECT_EQ(merger_->GetStatus().run_number, 100);
 }
 
-TEST_F(TimeSortMergerTest, RunningToConfigured) {
+TEST_F(SimpleMergerTest, RunningToConfigured) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -121,7 +125,7 @@ TEST_F(TimeSortMergerTest, RunningToConfigured) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Configured);
 }
 
-TEST_F(TimeSortMergerTest, ErrorToIdle) {
+TEST_F(SimpleMergerTest, ErrorToIdle) {
   // Force error state
   merger_->ForceError("Test error");
   EXPECT_EQ(merger_->GetState(), ComponentState::Error);
@@ -132,12 +136,12 @@ TEST_F(TimeSortMergerTest, ErrorToIdle) {
 
 // === Invalid State Transition Tests ===
 
-TEST_F(TimeSortMergerTest, CannotArmFromIdle) {
+TEST_F(SimpleMergerTest, CannotArmFromIdle) {
   EXPECT_FALSE(merger_->Arm());
   EXPECT_EQ(merger_->GetState(), ComponentState::Idle);
 }
 
-TEST_F(TimeSortMergerTest, CannotStartFromConfigured) {
+TEST_F(SimpleMergerTest, CannotStartFromConfigured) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -146,14 +150,14 @@ TEST_F(TimeSortMergerTest, CannotStartFromConfigured) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Configured);
 }
 
-TEST_F(TimeSortMergerTest, CannotStopFromIdle) {
+TEST_F(SimpleMergerTest, CannotStopFromIdle) {
   EXPECT_FALSE(merger_->Stop(true));
   EXPECT_EQ(merger_->GetState(), ComponentState::Idle);
 }
 
 // === Component ID Tests ===
 
-TEST_F(TimeSortMergerTest, ComponentIdAfterInitialize) {
+TEST_F(SimpleMergerTest, ComponentIdAfterInitialize) {
   merger_->SetComponentId("merger_01");
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
@@ -162,29 +166,16 @@ TEST_F(TimeSortMergerTest, ComponentIdAfterInitialize) {
   EXPECT_EQ(merger_->GetComponentId(), "merger_01");
 }
 
-// === Configuration Tests ===
-
-TEST_F(TimeSortMergerTest, CanSetSortWindowSize) {
-  // Sort window defines how much time to buffer before sorting
-  merger_->SetSortWindowNs(1000000);  // 1ms window
-  EXPECT_EQ(merger_->GetSortWindowNs(), 1000000);
-}
-
-TEST_F(TimeSortMergerTest, DefaultSortWindowIsReasonable) {
-  // Default should be a reasonable value (e.g., 10ms)
-  EXPECT_GT(merger_->GetSortWindowNs(), 0);
-}
-
 // === Validation Tests ===
 
-TEST_F(TimeSortMergerTest, InitializeFailsWithNoInputs) {
+TEST_F(SimpleMergerTest, InitializeFailsWithNoInputs) {
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
 
   EXPECT_FALSE(merger_->Initialize(""));
   EXPECT_EQ(merger_->GetState(), ComponentState::Idle);
 }
 
-TEST_F(TimeSortMergerTest, InitializeFailsWithNoOutputs) {
+TEST_F(SimpleMergerTest, InitializeFailsWithNoOutputs) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
 
   EXPECT_FALSE(merger_->Initialize(""));
@@ -193,7 +184,7 @@ TEST_F(TimeSortMergerTest, InitializeFailsWithNoOutputs) {
 
 // === Graceful vs Emergency Stop Tests ===
 
-TEST_F(TimeSortMergerTest, GracefulStopWaitsForProcessing) {
+TEST_F(SimpleMergerTest, GracefulStopWaitsForProcessing) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -207,7 +198,7 @@ TEST_F(TimeSortMergerTest, GracefulStopWaitsForProcessing) {
   EXPECT_EQ(merger_->GetState(), ComponentState::Configured);
 }
 
-TEST_F(TimeSortMergerTest, EmergencyStopIsImmediate) {
+TEST_F(SimpleMergerTest, EmergencyStopIsImmediate) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -221,7 +212,7 @@ TEST_F(TimeSortMergerTest, EmergencyStopIsImmediate) {
 
 // === Multiple Input Source Tests ===
 
-TEST_F(TimeSortMergerTest, TracksMultipleSources) {
+TEST_F(SimpleMergerTest, TracksMultipleSources) {
   std::vector<std::string> inputs = {"tcp://localhost:5555",
                                      "tcp://localhost:5556",
                                      "tcp://localhost:5557"};
@@ -235,7 +226,7 @@ TEST_F(TimeSortMergerTest, TracksMultipleSources) {
 
 // === Run Lifecycle Tests ===
 
-TEST_F(TimeSortMergerTest, MultipleRunCycles) {
+TEST_F(SimpleMergerTest, MultipleRunCycles) {
   merger_->SetInputAddresses({"tcp://localhost:5555"});
   merger_->SetOutputAddresses({"tcp://localhost:6666"});
   merger_->Initialize("");
@@ -251,6 +242,18 @@ TEST_F(TimeSortMergerTest, MultipleRunCycles) {
   merger_->Start(2);
   EXPECT_EQ(merger_->GetStatus().run_number, 2);
   merger_->Stop(true);
+}
+
+// === Queue Status Tests ===
+
+TEST_F(SimpleMergerTest, QueueSizeReportedInStatus) {
+  merger_->SetInputAddresses({"tcp://localhost:5555"});
+  merger_->SetOutputAddresses({"tcp://localhost:6666"});
+  merger_->Initialize("");
+
+  auto status = merger_->GetStatus();
+  EXPECT_EQ(status.metrics.queue_size, 0);
+  EXPECT_GT(status.metrics.queue_max, 0);  // Should have a max queue size
 }
 
 }  // namespace test
